@@ -23,21 +23,10 @@ async fn send_req(state: AppState, req: Request<Body>) -> (StatusCode, Value) {
 }
 
 async fn setup_e2e() -> AppState {
+    // Tests in this file run in parallel and each uses fresh Uuid::new_v4() host
+    // ids, so we rely on UUID scoping for isolation rather than truncating shared
+    // tables (which races with other tests' seeded rows).
     let pool = setup_test_db().await;
-    sqlx::query("DELETE FROM change_events")
-        .execute(&pool)
-        .await
-        .ok();
-    sqlx::query("DELETE FROM file_queries")
-        .execute(&pool)
-        .await
-        .ok();
-    sqlx::query("DELETE FROM files").execute(&pool).await.ok();
-    sqlx::query("DELETE FROM watch_roots")
-        .execute(&pool)
-        .await
-        .ok();
-    sqlx::query("DELETE FROM hosts").execute(&pool).await.ok();
     make_app_state(pool, "e2e-secret")
 }
 
