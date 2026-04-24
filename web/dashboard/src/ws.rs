@@ -1,12 +1,21 @@
 use futures::StreamExt;
-use gloo_net::websocket::{Message, futures::WebSocket};
+use gloo_net::websocket::{futures::WebSocket, Message};
 use wasm_bindgen_futures::spawn_local;
 use yew::Callback;
 
 use crate::models::{ConnectionStatus, FilterState, RealtimeMessage, WsMessage, WsMessageType};
 
-pub fn connect(base_url: &str, filters: &FilterState, on_message: Callback<RealtimeMessage>, on_status: Callback<ConnectionStatus>) {
-    let ws_url = format!("ws://{}/v1/changes/stream{}", base_url, filters.to_query_string());
+pub fn connect(
+    base_url: &str,
+    filters: &FilterState,
+    on_message: Callback<RealtimeMessage>,
+    on_status: Callback<ConnectionStatus>,
+) {
+    let ws_url = format!(
+        "ws://{}/v1/changes/stream{}",
+        base_url,
+        filters.to_query_string()
+    );
     let on_msg = on_message.clone();
     let on_stat = on_status.clone();
 
@@ -16,7 +25,10 @@ pub fn connect(base_url: &str, filters: &FilterState, on_message: Callback<Realt
         let ws = match WebSocket::open(&ws_url) {
             Ok(ws) => ws,
             Err(e) => {
-                on_stat.emit(ConnectionStatus::Error(format!("WebSocket open failed: {}", e)));
+                on_stat.emit(ConnectionStatus::Error(format!(
+                    "WebSocket open failed: {}",
+                    e
+                )));
                 return;
             }
         };
@@ -38,7 +50,9 @@ pub fn connect(base_url: &str, filters: &FilterState, on_message: Callback<Realt
                             }
                             WsMessageType::Gap => {
                                 // Client is lagging, could request full refresh
-                                gloo::console::warn!("WebSocket gap detected, some events may have been missed");
+                                gloo::console::warn!(
+                                    "WebSocket gap detected, some events may have been missed"
+                                );
                             }
                             WsMessageType::Heartbeat => {}
                         },

@@ -202,7 +202,10 @@ impl FilterState {
             }
         }
         params.push(format!("limit={}", pagination.page_size));
-        params.push(format!("offset={}", (pagination.page - 1) * pagination.page_size));
+        params.push(format!(
+            "offset={}",
+            (pagination.page - 1) * pagination.page_size
+        ));
         format!("?{}", params.join("&"))
     }
 }
@@ -288,8 +291,14 @@ pub fn severity_tooltip(severity: &str, summary: &Option<DiffSummary>) -> String
             let mut reasons: Vec<String> = Vec::new();
             if let Some(s) = summary {
                 for finding in &s.yaml_lint_findings {
-                    let line_info = finding.line.map(|l| format!(" (line {})", l)).unwrap_or_default();
-                    reasons.push(format!("{}: {}{}", finding.check, finding.message, line_info));
+                    let line_info = finding
+                        .line
+                        .map(|l| format!(" (line {})", l))
+                        .unwrap_or_default();
+                    reasons.push(format!(
+                        "{}: {}{}",
+                        finding.check, finding.message, line_info
+                    ));
                 }
             }
             if reasons.is_empty() {

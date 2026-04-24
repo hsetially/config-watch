@@ -2,14 +2,17 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 use uuid::Uuid;
-use yew::{function_component, html, use_effect_with, use_node_ref, Callback, Html, NodeRef, TargetCast, UseStateHandle};
 use web_sys::HtmlInputElement;
+use yew::{
+    function_component, html, use_effect_with, use_node_ref, Callback, Html, NodeRef, TargetCast,
+    UseStateHandle,
+};
 
 use crate::api;
 use crate::components::event_list::EventList;
+use crate::components::file_compare::FileCompare;
 use crate::components::filters::FilterBar;
 use crate::components::selection_bar::SelectionBar;
-use crate::components::file_compare::FileCompare;
 use crate::components::workflow_panel::WorkflowPanel;
 use crate::models::{
     history_row_to_message, ChangeEventRow, ChangesPage, ConnectionStatus, FilterState, HostInfo,
@@ -34,7 +37,8 @@ struct ScrollAnchor {
 pub fn app() -> Html {
     let stream_events: UseStateHandle<Vec<RealtimeMessage>> = yew::use_state(Vec::new);
     let history_events: UseStateHandle<Vec<RealtimeMessage>> = yew::use_state(Vec::new);
-    let connection: UseStateHandle<ConnectionStatus> = yew::use_state(|| ConnectionStatus::Disconnected);
+    let connection: UseStateHandle<ConnectionStatus> =
+        yew::use_state(|| ConnectionStatus::Disconnected);
     let filters: UseStateHandle<FilterState> = yew::use_state(FilterState::default);
     let expanded: UseStateHandle<Option<Uuid>> = yew::use_state(|| None);
     let server_url: UseStateHandle<String> = yew::use_state(|| "localhost:8082".to_string());
@@ -162,7 +166,8 @@ pub fn app() -> Html {
         let loading = loading.clone();
         let pagination = pagination.clone();
         Callback::from(move |page: ChangesPage| {
-            let messages: Vec<RealtimeMessage> = page.changes.iter().map(history_row_to_message).collect();
+            let messages: Vec<RealtimeMessage> =
+                page.changes.iter().map(history_row_to_message).collect();
             history_events.set(messages);
             pagination.set(PaginationState {
                 page: pagination.page,
@@ -184,30 +189,35 @@ pub fn app() -> Html {
             let history = history_events.clone();
             let stream = stream_events.clone();
             let mode = *view_mode;
-            api::fetch_event_detail(&server, &id_str, Callback::from(move |detail: Option<ChangeEventRow>| {
-                if let Some(row) = detail {
-                    if let Some(diff) = &row.diff_render {
-                        let update = |events: &mut Vec<RealtimeMessage>| {
-                            if let Some(e) = events.iter_mut().find(|e| e.event_id == event_id) {
-                                e.diff_render = Some(diff.clone());
+            api::fetch_event_detail(
+                &server,
+                &id_str,
+                Callback::from(move |detail: Option<ChangeEventRow>| {
+                    if let Some(row) = detail {
+                        if let Some(diff) = &row.diff_render {
+                            let update = |events: &mut Vec<RealtimeMessage>| {
+                                if let Some(e) = events.iter_mut().find(|e| e.event_id == event_id)
+                                {
+                                    e.diff_render = Some(diff.clone());
+                                }
+                            };
+                            match mode {
+                                ViewMode::History => {
+                                    let mut v = (*history).clone();
+                                    update(&mut v);
+                                    history.set(v);
+                                }
+                                ViewMode::Stream => {
+                                    let mut v = (*stream).clone();
+                                    update(&mut v);
+                                    stream.set(v);
+                                }
+                                ViewMode::Compare => {}
                             }
-                        };
-                        match mode {
-                            ViewMode::History => {
-                                let mut v = (*history).clone();
-                                update(&mut v);
-                                history.set(v);
-                            }
-                            ViewMode::Stream => {
-                                let mut v = (*stream).clone();
-                                update(&mut v);
-                                stream.set(v);
-                            }
-                            ViewMode::Compare => {}
                         }
                     }
-                }
-            }));
+                }),
+            );
         })
     };
 
@@ -464,7 +474,9 @@ pub fn app() -> Html {
     let event_count = active_events.len();
 
     let empty_msg = match *view_mode {
-        ViewMode::Stream => "Configure filters and connect to start receiving real-time change events.",
+        ViewMode::Stream => {
+            "Configure filters and connect to start receiving real-time change events."
+        }
         ViewMode::History => "Click Fetch to load change events from the database.",
         ViewMode::Compare => "Use the controls above to compare files across agents.",
     };

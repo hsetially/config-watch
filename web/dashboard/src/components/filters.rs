@@ -1,6 +1,6 @@
 use std::rc::Rc;
-use yew::{function_component, html, Callback, Html, Properties, TargetCast};
 use web_sys::{Event, HtmlInputElement, HtmlSelectElement};
+use yew::{function_component, html, Callback, Html, Properties, TargetCast};
 
 use crate::models::{FilterState, HostInfo, ViewMode, WatchRootInfo};
 

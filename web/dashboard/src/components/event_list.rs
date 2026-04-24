@@ -3,7 +3,10 @@ use std::rc::Rc;
 use yew::{function_component, html, Callback, Html, Properties};
 
 use crate::components::diff_viewer::DiffViewer;
-use crate::models::{event_kind_icon, format_event_time, severity_class, severity_tooltip, HostInfo, PaginationState, RealtimeMessage, ViewMode};
+use crate::models::{
+    event_kind_icon, format_event_time, severity_class, severity_tooltip, HostInfo,
+    PaginationState, RealtimeMessage, ViewMode,
+};
 
 #[derive(Properties, PartialEq)]
 pub struct EventListProps {
@@ -94,18 +97,22 @@ fn render_event(
     let select_cb = on_toggle_select.clone();
     let select_id = event.event_id;
 
-    let summary_text = event.summary.as_ref().map(|s| {
-        format!("{} lines changed", s.changed_line_estimate)
-    }).unwrap_or_else(|| "No summary".to_string());
+    let summary_text = event
+        .summary
+        .as_ref()
+        .map(|s| format!("{} lines changed", s.changed_line_estimate))
+        .unwrap_or_else(|| "No summary".to_string());
 
     let author = event.author_display.as_deref().unwrap_or("unknown");
-    let host_display = hosts.iter()
+    let host_display = hosts
+        .iter()
         .find(|h| h.host_id == event.host_id)
         .map(|h| h.hostname.clone())
         .unwrap_or_else(|| event.host_id.to_string());
 
     // Extract file name from path for the primary display
-    let file_name = event.path
+    let file_name = event
+        .path
         .rsplit('/')
         .next()
         .unwrap_or(&event.path)

@@ -1,4 +1,4 @@
-use yew::{function_component, html, UseStateHandle, Html, Properties};
+use yew::{function_component, html, Html, Properties, UseStateHandle};
 
 use crate::models::{DiffLine, DiffLineKind, WordSegment};
 
@@ -265,9 +265,17 @@ fn parse_side_by_side_rows(text: &str) -> Vec<SideBySideRow> {
             };
 
             rows.push(SideBySideRow {
-                left: if left_empty { None } else { Some(left_stripped) },
+                left: if left_empty {
+                    None
+                } else {
+                    Some(left_stripped)
+                },
                 left_kind,
-                right: if right_empty { None } else { Some(right_stripped) },
+                right: if right_empty {
+                    None
+                } else {
+                    Some(right_stripped)
+                },
                 right_kind,
             });
         }

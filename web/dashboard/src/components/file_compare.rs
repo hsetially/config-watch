@@ -73,7 +73,8 @@ fn load_column_types() -> Vec<ColumnType> {
         _ => return vec![ColumnType::Agent, ColumnType::Agent],
     };
     match storage.get_item("config_watch_compare_types") {
-        Ok(Some(json)) => serde_json::from_str(&json).unwrap_or_else(|_| vec![ColumnType::Agent, ColumnType::Agent]),
+        Ok(Some(json)) => serde_json::from_str(&json)
+            .unwrap_or_else(|_| vec![ColumnType::Agent, ColumnType::Agent]),
         _ => vec![ColumnType::Agent, ColumnType::Agent],
     }
 }
