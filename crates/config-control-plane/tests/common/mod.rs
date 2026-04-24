@@ -63,6 +63,17 @@ pub fn make_change_event_json(
     event_kind: &str,
     idempotency_key: &str,
 ) -> serde_json::Value {
+    make_change_event_json_with_severity(host_id, path, event_kind, idempotency_key, "info")
+}
+
+#[allow(dead_code)]
+pub fn make_change_event_json_with_severity(
+    host_id: &Uuid,
+    path: &str,
+    event_kind: &str,
+    idempotency_key: &str,
+    severity: &str,
+) -> serde_json::Value {
     serde_json::json!({
         "schema_version": "1.0",
         "event": {
@@ -71,7 +82,7 @@ pub fn make_change_event_json(
             "host_id": host_id.to_string(),
             "canonical_path": path,
             "event_kind": event_kind,
-            "severity": "info",
+            "severity": severity,
             "attribution": {
                 "author_name": "test-user",
                 "confidence": "unknown"

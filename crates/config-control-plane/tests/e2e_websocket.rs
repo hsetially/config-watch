@@ -177,7 +177,13 @@ async fn e2e_websocket_filter_by_severity() {
     let mut rx = state.broadcast_tx.subscribe();
 
     // Ingest warning event (severity: warning via event body)
-    let body_warning = make_change_event_json(&host_id, "/etc/warn.yaml", "deleted", "ws-warn-key");
+    let body_warning = make_change_event_json_with_severity(
+        &host_id,
+        "/etc/warn.yaml",
+        "deleted",
+        "ws-warn-key",
+        "warning",
+    );
     IngestService::ingest_change(
         state.db.pool(),
         &state.broadcast_tx,

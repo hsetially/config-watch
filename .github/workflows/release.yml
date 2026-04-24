@@ -52,22 +52,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install vcpkg dependencies
-        run: |
-          vcpkg install libgit2:x64-windows-static-md openssl:x64-windows-static-md
-          vcpkg integrate install
-        shell: pwsh
-
       - name: Set environment for static linking
-        run: |
-          echo "PKG_CONFIG_PATH=C:\vcpkg\installed\x64-windows-static-md\lib\pkgconfig" >> $env:GITHUB_ENV
-          echo "RUSTFLAGS=-C target-feature=+crt-static" >> $env:GITHUB_ENV
+        run: echo "RUSTFLAGS=-C target-feature=+crt-static" >> $env:GITHUB_ENV
         shell: pwsh
 
       - name: Build release binaries
         run: cargo build --release --bins
-        env:
-          LIBGIT2_NO_VENDOR: 1
 
       - name: Package binaries
         run: |

@@ -100,8 +100,7 @@ jobs:
             ext: .exe
             static_flags: "-C target-feature=+crt-static"
             pkg_install: |
-              vcpkg install libgit2:x64-windows-static-md openssl:x64-windows-static-md
-              vcpkg integrate install
+              echo "No system deps needed on Windows (libgit2 vendored)"
 
     steps:
       - uses: actions/checkout@v4
@@ -120,25 +119,14 @@ jobs:
         run: echo "RUSTFLAGS=${{ matrix.static_flags }}" >> $env:GITHUB_ENV
         shell: pwsh
 
-      - name: Set PKG_CONFIG_PATH (Windows)
-        if: matrix.os == 'windows-latest'
-        run: echo "PKG_CONFIG_PATH=C:\vcpkg\installed\x64-windows-static-md\lib\pkgconfig" >> $env:GITHUB_ENV
-        shell: pwsh
-
       - name: Build control-plane
         run: cargo build --release -p config-control-plane --target ${{ matrix.target }}
-        env:
-          LIBGIT2_NO_VENDOR: ${{ matrix.os == 'windows-latest' && '1' || '0' }}
 
       - name: Build agent
         run: cargo build --release -p config-agent --target ${{ matrix.target }}
-        env:
-          LIBGIT2_NO_VENDOR: ${{ matrix.os == 'windows-latest' && '1' || '0' }}
 
       - name: Build CLI
         run: cargo build --release -p config-cli --target ${{ matrix.target }}
-        env:
-          LIBGIT2_NO_VENDOR: ${{ matrix.os == 'windows-latest' && '1' || '0' }}
 
       - name: Upload artifacts (${{ matrix.os }})
         uses: actions/upload-artifact@v4
