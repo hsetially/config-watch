@@ -6,15 +6,25 @@
 FROM rust:1-bookworm AS builder
 WORKDIR /src
 
-RUN rustup target add wasm32-unknown-unknown \
- && cargo install --locked trunk@0.21.7
+RUN cargo install --locked trunk@0.21.7
 
 COPY . .
+
+# Install the wasm target AFTER COPY so rust-toolchain.toml is in effect
+# and the target is added to the resolved toolchain, not the image default.
+RUN rustup target add wasm32-unknown-unknown
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/target \
+    cargo build --release \
+        --manifest-path web/dashboard/Cargo.toml \
+        --target wasm32-unknown-unknown \
+        --verbose
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cd web/dashboard \
- && RUST_BACKTRACE=1 trunk build --release --public-url / -v
+ && RUST_BACKTRACE=full trunk build --release --public-url / -v
 
 # nginxinc/nginx-unprivileged runs as UID 101 and listens on :8080 by default.
 FROM nginxinc/nginx-unprivileged:1.27-alpine
