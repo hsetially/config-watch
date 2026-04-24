@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, master]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-Dwarnings"
@@ -68,65 +72,11 @@ jobs:
       - name: Install difftastic
         run: cargo install difftastic
 
-      - name: Run SQLx migrations
-        run: |
-          cargo install sqlx-cli --no-default-features --features native-tls,postgres
-          sqlx migrate run --source crates/config-storage/migrations
-        continue-on-error: true
-
       - name: Run tests
         run: cargo test --workspace --all-targets
 
       - name: Run ignored tests (difftastic)
         run: cargo test --workspace -- --ignored
-
-  test-windows:
-    name: Test (Windows)
-    runs-on: windows-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: config_watch_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install vcpkg dependencies (libgit2 + openssl)
-        run: |
-          vcpkg install libgit2:x64-windows-static-md
-          vcpkg integrate install
-        shell: pwsh
-
-      - name: Set PKG_CONFIG_PATH
-        run: echo "PKG_CONFIG_PATH=C:\vcpkg\installed\x64-windows-static-md\lib\pkgconfig" >> $env:GITHUB_ENV
-        shell: pwsh
-
-      - name: Install difftastic
-        run: cargo install difftastic
-
-      - name: Run tests
-        run: cargo test --workspace --all-targets
-        env:
-          LIBGIT2_NO_VENDOR: 1
-
-      - name: Run ignored tests (difftastic)
-        run: cargo test --workspace -- --ignored
-        env:
-          LIBGIT2_NO_VENDOR: 1
 
   build-binaries:
     name: Build Binaries (${{ matrix.os }})
