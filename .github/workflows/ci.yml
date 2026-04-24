@@ -162,3 +162,68 @@ jobs:
         with:
           name: config-dashboard
           path: web/dashboard/dist/
+
+  build-rocky8:
+    name: Build Check (Rocky Linux 8 — glibc 2.28, libssl.so.1.1)
+    needs: [checks]
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux:8
+    steps:
+      - name: Install build dependencies
+        run: |
+          dnf install -y epel-release
+          dnf install -y gcc gcc-c++ make cmake pkgconf-pkg-config \
+                         openssl-devel curl ca-certificates git tar gzip
+
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: rocky8-ci
+
+      - name: Build release binaries
+        run: cargo build --release -p config-control-plane -p config-agent -p config-cli
+
+      - name: Verify Rocky 8 linkage
+        run: |
+          for b in config-control-plane config-agent config-cli; do
+            if ldd target/release/$b | grep -q 'libssl.so.3'; then
+              echo "FAIL: $b links libssl.so.3 — will not load on Rocky 8" >&2
+              exit 1
+            fi
+          done
+
+  build-rocky9:
+    name: Build Check (Rocky Linux 9 — glibc 2.34, libssl.so.3)
+    needs: [checks]
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux:9
+    steps:
+      - name: Install build dependencies
+        run: |
+          dnf install -y epel-release
+          dnf install -y gcc gcc-c++ make cmake pkgconf-pkg-config \
+                         openssl-devel curl ca-certificates git tar gzip
+
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: rocky9-ci
+
+      - name: Build release binaries
+        run: cargo build --release -p config-control-plane -p config-agent -p config-cli

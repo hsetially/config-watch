@@ -58,9 +58,28 @@ jobs:
         run: echo "short_sha=$(echo '${{ github.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
 
   build-control-plane:
-    name: Build & push control-plane
+    name: Build & push control-plane (${{ matrix.base }})
     needs: [resolve]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Debian 12 (glibc 2.36, libssl.so.3) — the historical default. No suffix.
+          - base: debian
+            dockerfile: docker/Dockerfile.control-plane
+            suffix: ""
+            cache_scope: control-plane
+          # Rocky Linux 8 (glibc 2.28, libssl.so.1.1) — RHEL 8 / Rocky 8 / Alma 8.
+          - base: rocky8
+            dockerfile: docker/Dockerfile.control-plane.rocky8
+            suffix: "-rocky8"
+            cache_scope: control-plane-rocky8
+          # Rocky Linux 9 (glibc 2.34, libssl.so.3) — RHEL 9 / Rocky 9 / Alma 9.
+          - base: rocky9
+            dockerfile: docker/Dockerfile.control-plane.rocky9
+            suffix: "-rocky9"
+            cache_scope: control-plane-rocky9
     steps:
       - uses: actions/checkout@v4
 
@@ -79,27 +98,36 @@ jobs:
           image="${{ env.REGISTRY }}/${{ needs.resolve.outputs.owner_lc }}/config-watch-control-plane"
           ver="${{ needs.resolve.outputs.version }}"
           sha="${{ needs.resolve.outputs.short_sha }}"
+          suffix="${{ matrix.suffix }}"
+          # Debian variant keeps the legacy tag names so existing pins do not break.
+          # Rocky variants carry a -rocky8 / -rocky9 suffix on every tag.
+          if [ -z "$suffix" ]; then
+            moving="latest"
+          else
+            moving="${suffix#-}"   # e.g. "rocky8"
+          fi
           {
             echo "tags<<EOF"
-            echo "${image}:${ver}"
-            echo "${image}:${ver}-sha-${sha}"
-            echo "${image}:sha-${sha}"
-            echo "${image}:latest"
+            echo "${image}:${ver}${suffix}"
+            echo "${image}:${ver}${suffix}-sha-${sha}"
+            echo "${image}:sha-${sha}${suffix}"
+            echo "${image}:${moving}"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/Dockerfile.control-plane
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.tags.outputs.tags }}
-          cache-from: type=gha,scope=control-plane
-          cache-to: type=gha,scope=control-plane,mode=max
+          cache-from: type=gha,scope=${{ matrix.cache_scope }}
+          cache-to: type=gha,scope=${{ matrix.cache_scope }},mode=max
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.resolve.outputs.version }}
+            io.configwatch.base=${{ matrix.base }}
 
   build-dashboard:
     name: Build & push dashboard
@@ -160,10 +188,12 @@ jobs:
           {
             echo "### Published images"
             echo ""
-            echo "| Image | Unique tag | Version tag |"
-            echo "|---|---|---|"
-            echo "| control-plane | \`${image_cp}:${ver}-sha-${sha}\` | \`${image_cp}:${ver}\` |"
-            echo "| dashboard     | \`${image_db}:${ver}-sha-${sha}\` | \`${image_db}:${ver}\` |"
+            echo "| Image | Base | Unique tag | Moving tag |"
+            echo "|---|---|---|---|"
+            echo "| control-plane | Debian 12 | \`${image_cp}:${ver}-sha-${sha}\` | \`${image_cp}:${ver}\` / \`:latest\` |"
+            echo "| control-plane | Rocky 8   | \`${image_cp}:${ver}-rocky8-sha-${sha}\` | \`${image_cp}:${ver}-rocky8\` / \`:rocky8\` |"
+            echo "| control-plane | Rocky 9   | \`${image_cp}:${ver}-rocky9-sha-${sha}\` | \`${image_cp}:${ver}-rocky9\` / \`:rocky9\` |"
+            echo "| dashboard     | Alpine (nginx) | \`${image_db}:${ver}-sha-${sha}\` | \`${image_db}:${ver}\` / \`:latest\` |"
             echo ""
-            echo "> The \`${ver}\` tag is mutable. Pin to the \`-sha-${sha}\` tag or the digest for reproducible deploys. Bump \`[workspace.package].version\` in \`Cargo.toml\` before the next push if you want a fresh version tag."
+            echo "> Moving tags (\`${ver}\`, \`:latest\`, \`:rocky8\`, \`:rocky9\`) are overwritten on each publish. Pin to \`-sha-${sha}\` tags or digests for reproducible deploys. Bump \`[workspace.package].version\` in \`Cargo.toml\` before the next push if you want a fresh version tag."
           } >> "$GITHUB_STEP_SUMMARY"

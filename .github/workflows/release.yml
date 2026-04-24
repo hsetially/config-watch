@@ -11,7 +11,7 @@ env:
 
 jobs:
   build-linux:
-    name: Build Release (Linux)
+    name: Build Release (Linux, ubuntu-latest — glibc ≥ 2.35)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +41,106 @@ jobs:
         with:
           name: config-watch-linux-x86_64
           path: config-watch-linux-x86_64.tar.gz
+
+  build-rocky8:
+    name: Build Release (Rocky Linux 8 — glibc 2.28, libssl.so.1.1)
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux:8
+    steps:
+      - name: Install build dependencies (Rocky 8)
+        run: |
+          dnf install -y epel-release
+          dnf install -y gcc gcc-c++ make cmake pkgconf-pkg-config \
+                         openssl-devel curl ca-certificates git tar gzip
+
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: rocky8
+
+      - name: Build release binaries
+        run: cargo build --release --bins
+
+      - name: Sanity-check linkage (must be libssl.so.1.1, glibc ≤ 2.28)
+        run: |
+          for b in config-control-plane config-agent config-cli; do
+            echo "--- $b ---"
+            ldd target/release/$b | grep -E 'libssl|libcrypto|libc\.' || true
+            if ldd target/release/$b | grep -q 'libssl.so.3'; then
+              echo "ERROR: $b links libssl.so.3, expected libssl.so.1.1 on Rocky 8" >&2
+              exit 1
+            fi
+          done
+
+      - name: Package binaries
+        run: |
+          mkdir -p release
+          cp target/release/config-control-plane release/
+          cp target/release/config-agent release/
+          cp target/release/config-cli release/
+          tar -czf config-watch-rocky8-x86_64.tar.gz -C release .
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-watch-rocky8-x86_64
+          path: config-watch-rocky8-x86_64.tar.gz
+
+  build-rocky9:
+    name: Build Release (Rocky Linux 9 — glibc 2.34, libssl.so.3)
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux:9
+    steps:
+      - name: Install build dependencies (Rocky 9)
+        run: |
+          dnf install -y epel-release
+          dnf install -y gcc gcc-c++ make cmake pkgconf-pkg-config \
+                         openssl-devel curl ca-certificates git tar gzip
+
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: rocky9
+
+      - name: Build release binaries
+        run: cargo build --release --bins
+
+      - name: Sanity-check linkage (must be libssl.so.3)
+        run: |
+          for b in config-control-plane config-agent config-cli; do
+            echo "--- $b ---"
+            ldd target/release/$b | grep -E 'libssl|libcrypto|libc\.' || true
+          done
+
+      - name: Package binaries
+        run: |
+          mkdir -p release
+          cp target/release/config-control-plane release/
+          cp target/release/config-agent release/
+          cp target/release/config-cli release/
+          tar -czf config-watch-rocky9-x86_64.tar.gz -C release .
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-watch-rocky9-x86_64
+          path: config-watch-rocky9-x86_64.tar.gz
 
   build-windows:
     name: Build Release (Windows)
@@ -106,7 +206,8 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: [build-linux, build-windows, build-dashboard]
+    needs:
+      [build-linux, build-rocky8, build-rocky9, build-windows, build-dashboard]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -118,6 +219,18 @@ jobs:
         with:
           name: config-watch-linux-x86_64
           path: artifacts/linux
+
+      - name: Download Rocky 8 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: config-watch-rocky8-x86_64
+          path: artifacts/rocky8
+
+      - name: Download Rocky 9 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: config-watch-rocky9-x86_64
+          path: artifacts/rocky9
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
@@ -136,8 +249,20 @@ jobs:
         with:
           files: |
             artifacts/linux/config-watch-linux-x86_64.tar.gz
+            artifacts/rocky8/config-watch-rocky8-x86_64.tar.gz
+            artifacts/rocky9/config-watch-rocky9-x86_64.tar.gz
             artifacts/windows/config-watch-windows-x86_64.zip
             artifacts/dashboard/config-dashboard.zip
           generate_release_notes: true
+          body: |
+            ### Linux binary tarballs
+
+            | Tarball | Target distros | glibc | OpenSSL |
+            |---|---|---|---|
+            | `config-watch-linux-x86_64.tar.gz`  | Ubuntu 22.04+, Debian 12+ | ≥ 2.35 | 3.x |
+            | `config-watch-rocky8-x86_64.tar.gz` | Rocky 8.x, RHEL 8.x, Alma 8.x | 2.28 | 1.1.1 (`libssl.so.1.1`) |
+            | `config-watch-rocky9-x86_64.tar.gz` | Rocky 9.x, RHEL 9.x, Alma 9.x | 2.34 | 3.x |
+
+            Pick the tarball matching your target host's distro. Mixing (e.g., the `linux-x86_64` tarball on Rocky 8) will fail at load time with `GLIBC_2.3x not found` or `libssl.so.3: cannot open shared object file`.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

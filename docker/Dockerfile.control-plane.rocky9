@@ -1,0 +1,45 @@
+# syntax=docker/dockerfile:1.6
+#
+# Rocky Linux 9 build + runtime for config-control-plane.
+# Produces a binary that dynamically links glibc 2.34 and libssl.so.3,
+# so it runs on Rocky 9.x / RHEL 9.x / Alma 9.x hosts without rebuilding.
+# Built and pushed by .github/workflows/docker-publish.yml (matrix: rocky9).
+
+FROM rockylinux:9 AS builder
+WORKDIR /src
+
+RUN dnf install -y epel-release \
+ && dnf install -y gcc gcc-c++ make cmake pkgconf-pkg-config \
+                   openssl-devel curl ca-certificates git \
+ && dnf clean all \
+ && rm -rf /var/cache/dnf
+
+# Rust via rustup — the distro's packaged rustc trails our MSRV on the release cadence.
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+COPY . .
+
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/src/target \
+    cargo build --release -p config-control-plane \
+ && mkdir -p /out \
+ && cp target/release/config-control-plane /out/config-control-plane
+
+FROM rockylinux:9
+
+RUN dnf install -y openssl-libs ca-certificates \
+ && dnf clean all \
+ && rm -rf /var/cache/dnf \
+ && groupadd --system --gid 10001 app \
+ && useradd  --system --uid 10001 --gid 10001 --home-dir /var/lib/config-watch --no-create-home app \
+ && mkdir -p /var/lib/config-watch/snapshots /var/lib/config-watch/repos /etc/config-watch \
+ && chown -R app:app /var/lib/config-watch /etc/config-watch
+
+COPY --from=builder /out/config-control-plane /usr/local/bin/config-control-plane
+
+USER 10001:10001
+EXPOSE 8082
+
+ENTRYPOINT ["/usr/local/bin/config-control-plane"]
+CMD ["--config", "/etc/config-watch/control-plane.toml"]
