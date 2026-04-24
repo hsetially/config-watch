@@ -3,7 +3,7 @@
 # Builds the config-control-plane binary and packages it on a slim debian runtime.
 # Built and pushed by .github/workflows/docker-publish.yml.
 
-FROM rust:1.82-bookworm AS builder
+FROM rust:1-bookworm AS builder
 WORKDIR /src
 
 RUN apt-get update \

@@ -3,11 +3,11 @@
 # Builds the WASM dashboard with trunk and serves it through a non-root nginx.
 # Built and pushed by .github/workflows/docker-publish.yml.
 
-FROM rust:1.82-bookworm AS builder
+FROM rust:1-bookworm AS builder
 WORKDIR /src
 
 RUN rustup target add wasm32-unknown-unknown \
- && cargo install --locked trunk@0.21.7 wasm-bindgen-cli
+ && cargo install --locked trunk@0.21.7 wasm-bindgen-cli@0.2.118
 
 COPY . .
 
