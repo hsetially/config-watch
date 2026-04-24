@@ -6,7 +6,6 @@ node_modules
 data
 fixtures/diff-cases
 Dockerfile
-docker/
 docs/
 deploy/
 *.md
