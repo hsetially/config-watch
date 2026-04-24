@@ -10,7 +10,8 @@ pub async fn run(cfg: ControlPlaneConfig) -> anyhow::Result<()> {
     let db = config_storage::db::Database::connect(&cfg.database_url).await?;
     db.run_migrations().await?;
 
-    let snapshot_store = config_snapshot::store::SnapshotStore::new(Utf8Path::new(&cfg.snapshot_data_dir))?;
+    let snapshot_store =
+        config_snapshot::store::SnapshotStore::new(Utf8Path::new(&cfg.snapshot_data_dir))?;
 
     let state = AppState::new(db, cfg.control_plane_secret.clone(), snapshot_store)
         .with_query_timeout(cfg.query_timeout_secs)

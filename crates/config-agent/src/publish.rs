@@ -1,6 +1,8 @@
 use config_shared::events::{ChangeEvent, ChangeEventEnvelope};
 use config_shared::ids::IdempotencyKey;
-use config_transport::client::{ControlPlaneClient, HeartbeatRequest, RegisterRequest, RegisterResponse};
+use config_transport::client::{
+    ControlPlaneClient, HeartbeatRequest, RegisterRequest, RegisterResponse,
+};
 
 pub struct EventPublisher {
     client: ControlPlaneClient,
@@ -11,7 +13,14 @@ pub struct EventPublisher {
 }
 
 impl EventPublisher {
-    pub fn new(base_url: &str, auth_token: &str, host_id: uuid::Uuid, hostname: &str, environment: &str, agent_version: &str) -> Self {
+    pub fn new(
+        base_url: &str,
+        auth_token: &str,
+        host_id: uuid::Uuid,
+        hostname: &str,
+        environment: &str,
+        agent_version: &str,
+    ) -> Self {
         Self {
             client: ControlPlaneClient::new(base_url, auth_token),
             host_id,
@@ -33,7 +42,11 @@ impl EventPublisher {
         self.client.register(&request).await
     }
 
-    pub async fn heartbeat(&self, spool_depth: usize, watched_file_count: usize) -> anyhow::Result<()> {
+    pub async fn heartbeat(
+        &self,
+        spool_depth: usize,
+        watched_file_count: usize,
+    ) -> anyhow::Result<()> {
         let request = HeartbeatRequest {
             host_id: self.host_id,
             status: "healthy".into(),
@@ -53,7 +66,11 @@ impl EventPublisher {
         }
     }
 
-    pub async fn publish(&self, event: &ChangeEvent, idempotency_key: &IdempotencyKey) -> anyhow::Result<bool> {
+    pub async fn publish(
+        &self,
+        event: &ChangeEvent,
+        idempotency_key: &IdempotencyKey,
+    ) -> anyhow::Result<bool> {
         let envelope = ChangeEventEnvelope::wrap(event.clone());
         match self.client.publish_change(&envelope, idempotency_key).await {
             Ok(resp) => Ok(resp.accepted),

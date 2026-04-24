@@ -40,7 +40,11 @@ pub fn build_diff_summary(
 
 /// Legacy parser for raw diff render text (line_diff `+`/`-` format).
 /// Used when structured counts aren't available.
-pub fn parse_diff_summary(diff_render: &str, file_size_before: u64, file_size_after: u64) -> DiffSummary {
+pub fn parse_diff_summary(
+    diff_render: &str,
+    file_size_before: u64,
+    file_size_after: u64,
+) -> DiffSummary {
     let mut added = 0u64;
     let mut removed = 0u64;
     let mut comment_changes = 0u64;
@@ -78,7 +82,10 @@ pub fn parse_diff_summary(diff_render: &str, file_size_before: u64, file_size_af
     }
 }
 
-pub fn classify_severity(summary: &DiffSummary, event_kind: &config_shared::events::ChangeKind) -> Severity {
+pub fn classify_severity(
+    summary: &DiffSummary,
+    event_kind: &config_shared::events::ChangeKind,
+) -> Severity {
     if matches!(event_kind, config_shared::events::ChangeKind::Deleted) {
         return Severity::Info;
     }

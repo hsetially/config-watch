@@ -50,11 +50,7 @@ pub fn open_or_clone_repo(
     }
 }
 
-pub fn pull_repo(
-    repo: &Repository,
-    base_branch: &str,
-    token: Option<&str>,
-) -> anyhow::Result<()> {
+pub fn pull_repo(repo: &Repository, base_branch: &str, token: Option<&str>) -> anyhow::Result<()> {
     let mut callbacks = RemoteCallbacks::new();
     if let Some(t) = token {
         let token = t.to_string();
@@ -71,7 +67,9 @@ pub fn pull_repo(
         .fetch(&[base_branch], Some(&mut fetch_options), None)
         .context("git fetch")?;
 
-    let fetch_head = repo.find_reference("FETCH_HEAD").context("find FETCH_HEAD")?;
+    let fetch_head = repo
+        .find_reference("FETCH_HEAD")
+        .context("find FETCH_HEAD")?;
     let fetch_commit = fetch_head.peel_to_commit().context("peel FETCH_HEAD")?;
 
     // Update the remote tracking ref
@@ -102,9 +100,7 @@ pub fn clone_repo(url: &str, dest: &Path, token: Option<&str>) -> anyhow::Result
     let mut builder = git2::build::RepoBuilder::new();
     builder.fetch_options(fetch_options);
 
-    builder
-        .clone(url, dest)
-        .context("git clone failed")
+    builder.clone(url, dest).context("git clone failed")
 }
 
 /// Walk the repo working tree and find a file whose basename matches `filename`.
@@ -133,7 +129,11 @@ fn walk_dir_recursive(dir: &Path) -> anyhow::Result<Vec<String>> {
     Ok(results)
 }
 
-fn walk_dir_recursive_inner(base: &Path, dir: &Path, results: &mut Vec<String>) -> anyhow::Result<()> {
+fn walk_dir_recursive_inner(
+    base: &Path,
+    dir: &Path,
+    results: &mut Vec<String>,
+) -> anyhow::Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
@@ -178,7 +178,8 @@ pub fn apply_changes(
                 if file_path.exists() {
                     std::fs::remove_file(&file_path).context("remove file")?;
                     let rel = Path::new(&repo_relative);
-                    let _ = repo.index()
+                    let _ = repo
+                        .index()
                         .and_then(|mut idx| idx.remove_path(rel).map(|_| idx.write()))
                         .context("git rm")?;
                 }
@@ -188,7 +189,15 @@ pub fn apply_changes(
                 // If it does, writing the current snapshot produces a commit with only
                 // this event's changes. If not, fall back to full snapshot write.
                 let wrote_exact = if let Some(ref prev_hash) = change.previous_content_hash {
-                    match write_event_content(repo, &file_path, &repo_relative, resolver, &change.canonical_path, prev_hash, change.content_hash.as_deref()) {
+                    match write_event_content(
+                        repo,
+                        &file_path,
+                        &repo_relative,
+                        resolver,
+                        &change.canonical_path,
+                        prev_hash,
+                        change.content_hash.as_deref(),
+                    ) {
                         Ok(true) => {
                             tracing::debug!(path = %change.canonical_path, "wrote exact event content");
                             true
@@ -219,7 +228,8 @@ pub fn apply_changes(
                 }
 
                 let rel = Path::new(&repo_relative);
-                let _ = repo.index()
+                let _ = repo
+                    .index()
                     .and_then(|mut idx| idx.add_path(rel).map(|_| idx.write()))
                     .context("git add")?;
             }
@@ -288,46 +298,70 @@ pub fn commit_changes(
     message: &str,
 ) -> anyhow::Result<git2::Oid> {
     // Resolve the base branch (e.g. "main") — try remote ref first, then local
-    let base_commit = if let Ok(refname) = repo.find_reference(&format!("refs/remotes/origin/{base_branch}")) {
-        refname.peel_to_commit().context(format!("peel origin/{} to commit", base_branch))?
-    } else if let Ok(refname) = repo.find_reference(&format!("refs/heads/{base_branch}")) {
-        refname.peel_to_commit().context(format!("peel {} to commit", base_branch))?
-    } else {
-        // Fallback: try HEAD (the default clone checkout)
-        let head = repo.head().context("get HEAD")?;
-        head.peel_to_commit().context("peel HEAD to commit")?
-    };
+    let base_commit =
+        if let Ok(refname) = repo.find_reference(&format!("refs/remotes/origin/{base_branch}")) {
+            refname
+                .peel_to_commit()
+                .context(format!("peel origin/{} to commit", base_branch))?
+        } else if let Ok(refname) = repo.find_reference(&format!("refs/heads/{base_branch}")) {
+            refname
+                .peel_to_commit()
+                .context(format!("peel {} to commit", base_branch))?
+        } else {
+            // Fallback: try HEAD (the default clone checkout)
+            let head = repo.head().context("get HEAD")?;
+            head.peel_to_commit().context("peel HEAD to commit")?
+        };
 
     let branch = repo
         .branch(branch_name, &base_commit, false)
         .context("create branch")?;
 
-    let tree_id = repo.index().and_then(|mut idx| idx.write_tree()).context("write tree")?;
+    let tree_id = repo
+        .index()
+        .and_then(|mut idx| idx.write_tree())
+        .context("write tree")?;
     let tree = repo.find_tree(tree_id).context("find tree")?;
-    let sig = repo.signature().unwrap_or_else(|_| git2::Signature::now("config-watch", "bot@config-watch.local").unwrap());
+    let sig = repo.signature().unwrap_or_else(|_| {
+        git2::Signature::now("config-watch", "bot@config-watch.local").unwrap()
+    });
 
     let branch_ref = branch.get().name().context("branch name")?;
     let oid = repo
-        .commit(Some(branch_ref), &sig, &sig, message, &tree, &[&base_commit])
+        .commit(
+            Some(branch_ref),
+            &sig,
+            &sig,
+            message,
+            &tree,
+            &[&base_commit],
+        )
         .context("git commit")?;
 
     repo.set_head(branch_ref).context("set HEAD to branch")?;
     Ok(oid)
 }
 
-pub fn push_branch(repo: &Repository, branch_name: &str, token: Option<&str>) -> anyhow::Result<()> {
+pub fn push_branch(
+    repo: &Repository,
+    branch_name: &str,
+    token: Option<&str>,
+) -> anyhow::Result<()> {
     let mut remote = repo.find_remote("origin").context("find origin")?;
 
     let refspec = format!("refs/heads/{branch_name}:refs/heads/{branch_name}");
     let remote_url = remote.url().unwrap_or("");
     tracing::debug!(refspec = %refspec, has_token = token.is_some(), remote_url = %remote_url, "pushing branch");
 
-    if token.is_none() && (remote_url.starts_with("https://") || remote_url.starts_with("http://")) {
+    if token.is_none() && (remote_url.starts_with("https://") || remote_url.starts_with("http://"))
+    {
         anyhow::bail!("github_token is required to push to HTTPS remotes");
     }
 
     if remote_url.starts_with("git@") || remote_url.starts_with("ssh://") {
-        anyhow::bail!("SSH remote URLs are not supported for push; use an HTTPS URL with a github_token");
+        anyhow::bail!(
+            "SSH remote URLs are not supported for push; use an HTTPS URL with a github_token"
+        );
     }
 
     let mut callbacks = RemoteCallbacks::new();
@@ -339,7 +373,10 @@ pub fn push_branch(repo: &Repository, branch_name: &str, token: Option<&str>) ->
     }
     callbacks.push_update_reference(|refname, status| {
         if let Some(s) = status {
-            Err(git2::Error::from_str(&format!("push rejected for {}: {}", refname, s)))
+            Err(git2::Error::from_str(&format!(
+                "push rejected for {}: {}",
+                refname, s
+            )))
         } else {
             Ok(())
         }
@@ -350,7 +387,13 @@ pub fn push_branch(repo: &Repository, branch_name: &str, token: Option<&str>) ->
 
     remote
         .push(&[&refspec], Some(&mut push_options))
-        .with_context(|| format!("git push {} to {}", refspec, remote.url().unwrap_or("(no url)")))
+        .with_context(|| {
+            format!(
+                "git push {} to {}",
+                refspec,
+                remote.url().unwrap_or("(no url)")
+            )
+        })
 }
 
 #[cfg(test)]
@@ -359,9 +402,18 @@ mod tests {
 
     #[test]
     fn test_repo_dir_name() {
-        assert_eq!(repo_dir_name("https://github.com/myorg/myrepo.git"), "myorg-myrepo");
-        assert_eq!(repo_dir_name("https://github.com/myorg/myrepo"), "myorg-myrepo");
-        assert_eq!(repo_dir_name("https://github.com/my-org/my-repo.git"), "my-org-my-repo");
+        assert_eq!(
+            repo_dir_name("https://github.com/myorg/myrepo.git"),
+            "myorg-myrepo"
+        );
+        assert_eq!(
+            repo_dir_name("https://github.com/myorg/myrepo"),
+            "myorg-myrepo"
+        );
+        assert_eq!(
+            repo_dir_name("https://github.com/my-org/my-repo.git"),
+            "my-org-my-repo"
+        );
     }
 
     #[test]

@@ -118,9 +118,7 @@ fn default_content_preview_max_bytes() -> usize {
 }
 
 fn default_redaction_patterns() -> Vec<String> {
-    vec![
-        r"(?i)(token|secret|password|key|credential)".into(),
-    ]
+    vec![r"(?i)(token|secret|password|key|credential)".into()]
 }
 
 fn default_heartbeat_interval_secs() -> u64 {

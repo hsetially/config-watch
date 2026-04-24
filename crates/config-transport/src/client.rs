@@ -68,7 +68,8 @@ impl ControlPlaneClient {
     pub async fn register(&self, request: &RegisterRequest) -> Result<RegisterResponse> {
         let url = format!("{}/v1/agents/register", self.base_url);
         let enrollment_token = self.auth_token.lock().unwrap().clone();
-        let resp = self.http
+        let resp = self
+            .http
             .post(&url)
             .header("X-Enrollment-Token", &enrollment_token)
             .json(request)
@@ -81,7 +82,8 @@ impl ControlPlaneClient {
             anyhow::bail!("register failed: HTTP {}", status);
         }
 
-        let response = resp.json::<RegisterResponse>()
+        let response = resp
+            .json::<RegisterResponse>()
             .await
             .context("failed to parse register response")?;
 
@@ -110,7 +112,8 @@ impl ControlPlaneClient {
         let key_header = generate_idempotency_header(idempotency_key);
         let token = self.auth_token.lock().unwrap().clone();
 
-        let resp = self.http
+        let resp = self
+            .http
             .post(&url)
             .header("X-Agent-Token", &token)
             .header("X-Idempotency-Key", key_header)
@@ -142,7 +145,8 @@ impl ControlPlaneClient {
         let token = self.auth_token.lock().unwrap().clone();
 
         loop {
-            let resp = self.http
+            let resp = self
+                .http
                 .post(url)
                 .header("X-Agent-Token", &token)
                 .json(body)

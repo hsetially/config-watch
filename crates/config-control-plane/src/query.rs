@@ -21,10 +21,17 @@ impl QueryService {
         offset: i64,
     ) -> anyhow::Result<PaginatedResponse<ChangeEventRow>> {
         let items = ChangeEventsRepo::list(pool, &filters, limit, offset).await?;
-        Ok(PaginatedResponse { items, limit, offset })
+        Ok(PaginatedResponse {
+            items,
+            limit,
+            offset,
+        })
     }
 
-    pub async fn get_change(pool: &PgPool, event_id: Uuid) -> anyhow::Result<Option<ChangeEventRow>> {
+    pub async fn get_change(
+        pool: &PgPool,
+        event_id: Uuid,
+    ) -> anyhow::Result<Option<ChangeEventRow>> {
         ChangeEventsRepo::get(pool, event_id).await
     }
 }

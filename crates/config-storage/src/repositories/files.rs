@@ -33,9 +33,13 @@ impl FilesRepo {
         Ok(row)
     }
 
-    pub async fn get_by_path(pool: &PgPool, host_id: Uuid, canonical_path: &str) -> anyhow::Result<Option<FileRow>> {
+    pub async fn get_by_path(
+        pool: &PgPool,
+        host_id: Uuid,
+        canonical_path: &str,
+    ) -> anyhow::Result<Option<FileRow>> {
         let row = sqlx::query_as::<_, FileRow>(
-            "SELECT * FROM files WHERE host_id = $1 AND canonical_path = $2"
+            "SELECT * FROM files WHERE host_id = $1 AND canonical_path = $2",
         )
         .bind(host_id)
         .bind(canonical_path)

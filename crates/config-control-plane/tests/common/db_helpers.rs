@@ -15,7 +15,7 @@ pub async fn seed_host(
              hostname = EXCLUDED.hostname,
              environment = EXCLUDED.environment,
              status = 'healthy',
-             last_heartbeat_at = NOW()"
+             last_heartbeat_at = NOW()",
     )
     .bind(host_id)
     .bind(hostname)
@@ -38,7 +38,7 @@ pub async fn seed_change_event(
         "INSERT INTO change_events (
             event_id, idempotency_key, host_id, event_time, event_kind,
             author_confidence, severity
-         ) VALUES ($1, $2, $3, NOW(), $4, 'unknown', $5)"
+         ) VALUES ($1, $2, $3, NOW(), $4, 'unknown', $5)",
     )
     .bind(event_id)
     .bind(idempotency_key)

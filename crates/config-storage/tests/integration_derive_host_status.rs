@@ -1,5 +1,5 @@
+use chrono::{Duration, Utc};
 use config_storage::repositories::hosts::derive_host_status;
-use chrono::{Utc, Duration};
 
 #[test]
 fn no_heartbeat_returns_registering() {

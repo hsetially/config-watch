@@ -86,7 +86,12 @@ impl TunnelMessage {
     }
 
     pub fn query_request(request_id: String, kind: QueryKind, path: String) -> Self {
-        let payload = QueryRequestPayload { kind, path, offset: None, limit: None };
+        let payload = QueryRequestPayload {
+            kind,
+            path,
+            offset: None,
+            limit: None,
+        };
         Self {
             msg_type: TunnelMessageType::QueryRequest,
             request_id: Some(request_id),
@@ -94,8 +99,18 @@ impl TunnelMessage {
         }
     }
 
-    pub fn content_query_request(request_id: String, path: String, offset: Option<u64>, limit: Option<u64>) -> Self {
-        let payload = QueryRequestPayload { kind: QueryKind::Content, path, offset, limit };
+    pub fn content_query_request(
+        request_id: String,
+        path: String,
+        offset: Option<u64>,
+        limit: Option<u64>,
+    ) -> Self {
+        let payload = QueryRequestPayload {
+            kind: QueryKind::Content,
+            path,
+            offset,
+            limit,
+        };
         Self {
             msg_type: TunnelMessageType::QueryRequest,
             request_id: Some(request_id),
@@ -169,7 +184,10 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         let decoded: TunnelMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.msg_type, TunnelMessageType::QueryRequest);
-        let payload: QueryRequestPayload = decoded.payload.and_then(|v| serde_json::from_value(v).ok()).unwrap();
+        let payload: QueryRequestPayload = decoded
+            .payload
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap();
         assert_eq!(payload.kind, QueryKind::Content);
         assert_eq!(payload.path, "/etc/app/big-config.yaml");
         assert_eq!(payload.offset, Some(0));

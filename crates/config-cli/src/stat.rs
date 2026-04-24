@@ -7,17 +7,16 @@ pub async fn file_stat(base_url: &str, host_id: &str, path: &str) -> Result<()> 
         "path": path,
     });
 
-    let resp = reqwest::Client::new()
-        .post(&url)
-        .json(&body)
-        .send()
-        .await?;
+    let resp = reqwest::Client::new().post(&url).json(&body).send().await?;
 
     let status = resp.status();
     let result: serde_json::Value = resp.json().await?;
 
     if !status.is_success() {
-        let error = result.get("error").and_then(|v| v.as_str()).unwrap_or("unknown error");
+        let error = result
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown error");
         eprintln!("Error ({}): {}", status, error);
         return Ok(());
     }

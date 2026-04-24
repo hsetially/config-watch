@@ -16,19 +16,30 @@ fn make_state(secret: &str) -> AppState {
     let (tx, _) = tokio::sync::broadcast::channel(256);
     let metrics = config_control_plane::metrics::ControlPlaneMetrics::new();
     let tmp = tempfile::tempdir().expect("create temp dir");
-    let snapshot_store = config_snapshot::store::SnapshotStore::new(camino::Utf8Path::new(tmp.path().join("snapshots").to_str().unwrap())).expect("create snapshot store");
+    let snapshot_store = config_snapshot::store::SnapshotStore::new(camino::Utf8Path::new(
+        tmp.path().join("snapshots").to_str().unwrap(),
+    ))
+    .expect("create snapshot store");
     AppState {
         db: std::sync::Arc::new(Database::from_pool(
-            sqlx::PgPool::connect_lazy("postgres://localhost/nonexistent").unwrap()
+            sqlx::PgPool::connect_lazy("postgres://localhost/nonexistent").unwrap(),
         )),
         broadcast_tx: tx,
         secret: secret.to_string(),
         operator_keys: std::sync::Arc::new(HashMap::from([
-            ("op-key-admin".to_string(), ("admin-user".to_string(), "admin".to_string())),
-            ("op-key-viewer".to_string(), ("viewer-user".to_string(), "viewer".to_string())),
+            (
+                "op-key-admin".to_string(),
+                ("admin-user".to_string(), "admin".to_string()),
+            ),
+            (
+                "op-key-viewer".to_string(),
+                ("viewer-user".to_string(), "viewer".to_string()),
+            ),
         ])),
         metrics: metrics.clone(),
-        tunnel_registry: std::sync::Arc::new(config_control_plane::tunnel::AgentRegistry::new(metrics)),
+        tunnel_registry: std::sync::Arc::new(config_control_plane::tunnel::AgentRegistry::new(
+            metrics,
+        )),
         query_timeout_secs: 10,
         snapshot_store: std::sync::Arc::new(snapshot_store),
         repos_dir: "./data/repos".to_string(),
@@ -72,7 +83,8 @@ async fn agent_auth_valid_token_extracts_host_id() {
         secret,
         &host_id.to_string(),
         chrono::Duration::hours(24),
-    ).token;
+    )
+    .token;
 
     let req = Request::builder()
         .method("POST")
@@ -95,7 +107,8 @@ async fn agent_auth_expired_token_returns_401() {
         secret,
         &host_id.to_string(),
         chrono::Duration::seconds(-1),
-    ).token;
+    )
+    .token;
 
     let req = Request::builder()
         .method("POST")
@@ -115,7 +128,8 @@ async fn agent_auth_wrong_secret_returns_401() {
         "wrong-secret",
         &host_id.to_string(),
         chrono::Duration::hours(24),
-    ).token;
+    )
+    .token;
 
     let req = Request::builder()
         .method("POST")
@@ -165,7 +179,10 @@ async fn operator_auth_valid_key_returns_role() {
     assert!(result.is_ok(), "Expected Ok, got err: {:?}", result.err());
     let auth = result.unwrap();
     assert_eq!(auth.operator_id, "admin-user");
-    assert!(matches!(auth.role, config_control_plane::http::extractors::OperatorRole::Admin));
+    assert!(matches!(
+        auth.role,
+        config_control_plane::http::extractors::OperatorRole::Admin
+    ));
 }
 
 #[tokio::test]

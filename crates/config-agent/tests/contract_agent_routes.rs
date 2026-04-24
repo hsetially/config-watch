@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tower::ServiceExt;
 
-use config_agent::api::{AgentState, build_agent_router};
+use config_agent::api::{build_agent_router, AgentState};
 use config_agent::query_handler::QueryHandler;
 
 fn make_agent_state(temp_dir: &std::path::Path) -> AgentState {
@@ -46,7 +46,12 @@ async fn file_metadata_missing_path_returns_400() {
         .unwrap();
     let (status, json) = send_request(app, req).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("missing path"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("missing path"));
 }
 
 #[tokio::test]
@@ -63,7 +68,12 @@ async fn file_metadata_denied_path_returns_403() {
         .unwrap();
     let (status, json) = send_request(app, req).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("denied by security policy"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("denied by security policy"));
 }
 
 #[tokio::test]
@@ -80,7 +90,12 @@ async fn file_metadata_outside_watch_root_returns_403() {
         .unwrap();
     let (status, json) = send_request(app, req).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("not in watch roots"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("not in watch roots"));
 }
 
 #[tokio::test]
@@ -137,7 +152,12 @@ async fn file_preview_missing_path_returns_400() {
         .unwrap();
     let (status, json) = send_request(app, req).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("missing path"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("missing path"));
 }
 
 #[tokio::test]
@@ -154,14 +174,23 @@ async fn file_preview_denied_path_returns_403() {
         .unwrap();
     let (status, json) = send_request(app, req).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("denied by security policy"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("denied by security policy"));
 }
 
 #[tokio::test]
 async fn file_preview_valid_returns_200_with_redaction() {
     let temp_dir = tempfile::tempdir().unwrap();
     let yaml_path = temp_dir.path().join("secrets.yaml");
-    std::fs::write(&yaml_path, "database_password: supersecret\ndatabase_host: localhost\n").unwrap();
+    std::fs::write(
+        &yaml_path,
+        "database_password: supersecret\ndatabase_host: localhost\n",
+    )
+    .unwrap();
 
     let state = make_agent_state(temp_dir.path());
     let app = build_agent_router(state);
@@ -175,6 +204,13 @@ async fn file_preview_valid_returns_200_with_redaction() {
     let (status, json) = send_request(app, req).await;
     assert_eq!(status, StatusCode::OK);
     let content = json.get("content").unwrap().as_str().unwrap();
-    assert!(content.contains("[REDACTED]"), "Expected password value to be redacted, got: {}", content);
-    assert!(content.contains("database_password"), "Key name should still be present");
+    assert!(
+        content.contains("[REDACTED]"),
+        "Expected password value to be redacted, got: {}",
+        content
+    );
+    assert!(
+        content.contains("database_password"),
+        "Key name should still be present"
+    );
 }

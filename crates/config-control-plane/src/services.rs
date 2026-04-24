@@ -47,7 +47,12 @@ impl AppState {
         self
     }
 
-    pub fn with_broadcast_capacity(db: Database, secret: String, capacity: usize, snapshot_store: SnapshotStore) -> Self {
+    pub fn with_broadcast_capacity(
+        db: Database,
+        secret: String,
+        capacity: usize,
+        snapshot_store: SnapshotStore,
+    ) -> Self {
         let metrics = ControlPlaneMetrics::new();
         let (broadcast_tx, _) = broadcast::channel(capacity);
         let tunnel_registry = Arc::new(AgentRegistry::new(metrics.clone()));

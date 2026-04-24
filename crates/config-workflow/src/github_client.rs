@@ -17,9 +17,18 @@ pub async fn create_pr(
     let url = format!("https://api.github.com/repos/{owner}/{repo_name}/pulls");
 
     let mut map = serde_json::Map::new();
-    map.insert("title".to_string(), serde_json::Value::String(title.to_string()));
-    map.insert("head".to_string(), serde_json::Value::String(head.to_string()));
-    map.insert("base".to_string(), serde_json::Value::String(base.to_string()));
+    map.insert(
+        "title".to_string(),
+        serde_json::Value::String(title.to_string()),
+    );
+    map.insert(
+        "head".to_string(),
+        serde_json::Value::String(head.to_string()),
+    );
+    map.insert(
+        "base".to_string(),
+        serde_json::Value::String(base.to_string()),
+    );
     if let Some(b) = body {
         map.insert("body".to_string(), serde_json::Value::String(b.to_string()));
     }
@@ -62,7 +71,9 @@ pub async fn add_reviewers(
     pr_number: i64,
     reviewers: &[String],
 ) -> anyhow::Result<()> {
-    let url = format!("https://api.github.com/repos/{owner}/{repo_name}/pulls/{pr_number}/requested_reviewers");
+    let url = format!(
+        "https://api.github.com/repos/{owner}/{repo_name}/pulls/{pr_number}/requested_reviewers"
+    );
 
     let body = serde_json::json!({
         "reviewers": reviewers
@@ -121,9 +132,7 @@ pub async fn fetch_file_contents(
     path: &str,
     branch: &str,
 ) -> anyhow::Result<GitHubFileContent> {
-    let url = format!(
-        "https://api.github.com/repos/{owner}/{repo}/contents/{path}?ref={branch}"
-    );
+    let url = format!("https://api.github.com/repos/{owner}/{repo}/contents/{path}?ref={branch}");
 
     let mut req = reqwest::Client::new()
         .get(&url)
@@ -170,7 +179,8 @@ pub async fn fetch_file_contents(
 pub fn parse_github_blob_url(url: &str) -> anyhow::Result<(String, String, String, String)> {
     let url = url.trim().trim_end_matches('/');
     let blob_marker = "/blob/";
-    let blob_pos = url.find(blob_marker)
+    let blob_pos = url
+        .find(blob_marker)
         .ok_or_else(|| anyhow::anyhow!("not a github blob URL (missing /blob/): {}", url))?;
 
     let repo_part = &url[..blob_pos];
@@ -178,7 +188,8 @@ pub fn parse_github_blob_url(url: &str) -> anyhow::Result<(String, String, Strin
 
     let (owner, repo) = parse_owner_repo(repo_part)?;
 
-    let slash_pos = after_blob.find('/')
+    let slash_pos = after_blob
+        .find('/')
         .ok_or_else(|| anyhow::anyhow!("cannot separate branch from path in: {}", url))?;
     let branch = after_blob[..slash_pos].to_string();
     let path = after_blob[slash_pos + 1..].to_string();
@@ -216,9 +227,9 @@ mod tests {
 
     #[test]
     fn test_parse_github_blob_url() {
-        let (owner, repo, branch, path) = parse_github_blob_url(
-            "https://github.com/myorg/myrepo/blob/main/config/app.yaml"
-        ).unwrap();
+        let (owner, repo, branch, path) =
+            parse_github_blob_url("https://github.com/myorg/myrepo/blob/main/config/app.yaml")
+                .unwrap();
         assert_eq!(owner, "myorg");
         assert_eq!(repo, "myrepo");
         assert_eq!(branch, "main");
@@ -230,9 +241,9 @@ mod tests {
         // Branch names with / are not reliably parseable from URL alone.
         // The function splits at the first /, treating "feature" as the branch
         // and "auth/config.toml" as the path. This is a known limitation.
-        let (owner, repo, branch, path) = parse_github_blob_url(
-            "https://github.com/myorg/myrepo/blob/feature/auth/config.toml"
-        ).unwrap();
+        let (owner, repo, branch, path) =
+            parse_github_blob_url("https://github.com/myorg/myrepo/blob/feature/auth/config.toml")
+                .unwrap();
         assert_eq!(owner, "myorg");
         assert_eq!(repo, "myrepo");
         assert_eq!(branch, "feature");

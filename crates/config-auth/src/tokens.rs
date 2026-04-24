@@ -17,8 +17,8 @@ impl AgentCredential {
         let expires_str = expires_at.format("%Y-%m-%dT%H:%M:%SZ").to_string();
         let message = format!("{}|{}", host_id, expires_str);
 
-        let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-            .expect("HMAC can take key of any size");
+        let mut mac =
+            HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
         mac.update(message.as_bytes());
         let result = mac.finalize();
         let sig = hex::encode(result.into_bytes());
@@ -51,16 +51,13 @@ impl AgentCredential {
         }
 
         let message = format!("{}|{}", host_id, expires_str);
-        let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-            .expect("HMAC can take key of any size");
+        let mut mac =
+            HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
         mac.update(message.as_bytes());
         let result = mac.finalize();
         let expected_sig = hex::encode(result.into_bytes());
 
-        if !constant_time_eq::constant_time_eq(
-            provided_sig.as_bytes(),
-            expected_sig.as_bytes(),
-        ) {
+        if !constant_time_eq::constant_time_eq(provided_sig.as_bytes(), expected_sig.as_bytes()) {
             return Err("invalid signature");
         }
 

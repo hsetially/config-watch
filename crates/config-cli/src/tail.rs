@@ -47,19 +47,46 @@ pub async fn tail_changes(
                                 }
                             };
 
-                            let msg_type = parsed.get("msg_type").and_then(|v| v.as_str()).unwrap_or("");
+                            let msg_type = parsed
+                                .get("msg_type")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
 
                             match msg_type {
                                 "Change" => {
                                     if let Some(event) = parsed.get("event") {
-                                        let _event_id = event.get("event_id").and_then(|v| v.as_str()).unwrap_or("-");
-                                        let host_id = event.get("host_id").and_then(|v| v.as_str()).unwrap_or("-");
-                                        let env = event.get("environment").and_then(|v| v.as_str()).unwrap_or("-");
-                                        let path = event.get("path").and_then(|v| v.as_str()).unwrap_or("-");
-                                        let kind = event.get("event_kind").and_then(|v| v.as_str()).unwrap_or("-");
-                                        let severity = event.get("severity").and_then(|v| v.as_str()).unwrap_or("-");
-                                        let time = event.get("event_time").and_then(|v| v.as_str()).unwrap_or("-");
-                                        let author = event.get("author_display").and_then(|v| v.as_str()).unwrap_or("-");
+                                        let _event_id = event
+                                            .get("event_id")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("-");
+                                        let host_id = event
+                                            .get("host_id")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("-");
+                                        let env = event
+                                            .get("environment")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("-");
+                                        let path = event
+                                            .get("path")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("-");
+                                        let kind = event
+                                            .get("event_kind")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("-");
+                                        let severity = event
+                                            .get("severity")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("-");
+                                        let time = event
+                                            .get("event_time")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("-");
+                                        let author = event
+                                            .get("author_display")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("-");
 
                                         let severity_marker = match severity {
                                             "critical" => "[CRIT]",
@@ -73,7 +100,9 @@ pub async fn tail_changes(
                                         );
 
                                         if show_diff {
-                                            if let Some(diff) = event.get("diff_render").and_then(|v| v.as_str()) {
+                                            if let Some(diff) =
+                                                event.get("diff_render").and_then(|v| v.as_str())
+                                            {
                                                 if !diff.is_empty() {
                                                     println!("--- diff ---");
                                                     for line in diff.lines() {

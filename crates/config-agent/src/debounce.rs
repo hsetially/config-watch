@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
 use camino::Utf8PathBuf;
+use chrono::{DateTime, Utc};
 
 use config_shared::events::ChangeKind;
 
@@ -36,14 +36,15 @@ impl DebounceWindow {
     }
 
     pub fn ingest(&mut self, event: RawWatchEvent, file_exists: bool) {
-        let entry = self.pending.entry(event.raw_path.clone()).or_insert_with(|| {
-            DebounceWindowEntry {
+        let entry = self
+            .pending
+            .entry(event.raw_path.clone())
+            .or_insert_with(|| DebounceWindowEntry {
                 first_seen: event.observed_at,
                 latest_kind: event.event_kind.clone(),
                 raw_count: 0,
                 exists_before: file_exists,
-            }
-        });
+            });
         entry.latest_kind = event.event_kind;
         entry.raw_count += 1;
         if file_exists {
@@ -62,7 +63,8 @@ impl DebounceWindow {
             if let Some(entry) = self.pending.get(&key) {
                 if now - entry.first_seen >= window_duration {
                     if let Some(entry) = self.pending.remove(&key) {
-                        let event_kind = map_debounced_kind(&entry.latest_kind, entry.exists_before);
+                        let event_kind =
+                            map_debounced_kind(&entry.latest_kind, entry.exists_before);
                         expired.push(DebouncedEvent {
                             canonical_path: key,
                             event_kind,

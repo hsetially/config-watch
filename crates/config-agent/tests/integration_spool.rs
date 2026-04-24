@@ -1,9 +1,9 @@
 use camino::Utf8PathBuf;
 use chrono::Utc;
 use config_agent::spool::{DeliveryStatus, SpoolWriter};
+use config_shared::attribution::Attribution;
 use config_shared::events::{ChangeEvent, ChangeKind, Severity};
 use config_shared::ids::{EventId, HostId, IdempotencyKey};
-use config_shared::attribution::Attribution;
 
 fn make_event(id: &str) -> ChangeEvent {
     ChangeEvent {
@@ -59,7 +59,10 @@ async fn spool_mark_failed_removes_from_pending() {
 
     let event = make_event("cccccccc-cccc-cccc-cccc-cccccccccccc");
     writer.append(&event).await.unwrap();
-    writer.mark_failed(&event.event_id, "permanent error").await.unwrap();
+    writer
+        .mark_failed(&event.event_id, "permanent error")
+        .await
+        .unwrap();
 
     let pending = writer.pending_entries().await.unwrap();
     assert!(pending.is_empty());
@@ -136,5 +139,8 @@ fn spool_index_persists_status() {
     assert!(index_path.exists(), "Index file should exist after append");
 
     let content = std::fs::read_to_string(&index_path).unwrap();
-    assert!(content.contains(&event.event_id.to_string()), "Index should contain event ID");
+    assert!(
+        content.contains(&event.event_id.to_string()),
+        "Index should contain event ID"
+    );
 }

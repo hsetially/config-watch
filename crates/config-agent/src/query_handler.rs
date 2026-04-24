@@ -36,7 +36,11 @@ pub struct QueryHandler {
 }
 
 impl QueryHandler {
-    pub fn new(watch_roots: Vec<String>, redaction_patterns: Vec<String>, preview_max_bytes: usize) -> Self {
+    pub fn new(
+        watch_roots: Vec<String>,
+        redaction_patterns: Vec<String>,
+        preview_max_bytes: usize,
+    ) -> Self {
         // Resolve relative watch roots to absolute paths so that incoming absolute query paths
         // match correctly on Windows (an absolute path cannot start_with a relative path).
         let resolved_roots: Vec<String> = watch_roots
@@ -105,7 +109,9 @@ impl QueryHandler {
 
         let content_hash = if metadata.is_file() {
             match camino::Utf8PathBuf::from_path_buf(p.to_path_buf()) {
-                Ok(utf8_path) => config_snapshot::hash::compute_blake3_file(&utf8_path).await.ok(),
+                Ok(utf8_path) => config_snapshot::hash::compute_blake3_file(&utf8_path)
+                    .await
+                    .ok(),
                 Err(_) => None,
             }
         } else {
@@ -139,8 +145,8 @@ impl QueryHandler {
             });
         }
 
-        let raw_content = std::fs::read_to_string(p)
-            .with_context(|| format!("failed to read file: {}", path))?;
+        let raw_content =
+            std::fs::read_to_string(p).with_context(|| format!("failed to read file: {}", path))?;
 
         let redacted = self.redaction.redact_yaml(&raw_content);
         let truncated = redacted.len() > self.redaction.max_preview_bytes;
@@ -161,7 +167,12 @@ impl QueryHandler {
     /// Returns the content base64-encoded for safe JSON transport over WebSocket.
     /// `offset` is the byte offset to start reading from. `limit` is the max bytes to read.
     /// If limit is None, reads up to DEFAULT_CHUNK_BYTES.
-    pub fn content(&self, path: &str, offset: Option<u64>, limit: Option<u64>) -> Result<FileContentResponse> {
+    pub fn content(
+        &self,
+        path: &str,
+        offset: Option<u64>,
+        limit: Option<u64>,
+    ) -> Result<FileContentResponse> {
         self.check_path(path)?;
 
         let p = Path::new(path);
@@ -199,8 +210,8 @@ impl QueryHandler {
         let remaining = file_size - offset;
         let read_len = remaining.min(max_read) as usize;
 
-        let mut file = std::fs::File::open(p)
-            .with_context(|| format!("failed to open file: {}", path))?;
+        let mut file =
+            std::fs::File::open(p).with_context(|| format!("failed to open file: {}", path))?;
         std::io::Seek::seek(&mut file, std::io::SeekFrom::Start(offset))
             .with_context(|| format!("failed to seek to offset {}: {}", offset, path))?;
 
@@ -247,12 +258,11 @@ mod tests {
         // Simulate what happens on Windows: watch root is relative (e.g. "./fixtures/yaml")
         // but query arrives as an absolute path. After resolution in QueryHandler::new,
         // the watch root becomes absolute and Path::starts_with works.
-        let resolved_root = std::env::current_dir().unwrap().join("fixtures").join("yaml");
-        let handler = QueryHandler::new(
-            vec!["./fixtures/yaml".to_string()],
-            vec![],
-            4096,
-        );
+        let resolved_root = std::env::current_dir()
+            .unwrap()
+            .join("fixtures")
+            .join("yaml");
+        let handler = QueryHandler::new(vec!["./fixtures/yaml".to_string()], vec![], 4096);
 
         // The watch root should now be absolute
         assert!(

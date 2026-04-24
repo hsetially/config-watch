@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use chrono::Utc;
-use config_agent::debounce::{DebouncedEvent, DebounceWindow};
-use config_agent::pipeline::{Pipeline, SnapshotDecision};
 use config_agent::config::{AgentConfig, WatchRootConfig};
+use config_agent::debounce::{DebounceWindow, DebouncedEvent};
+use config_agent::pipeline::{Pipeline, SnapshotDecision};
 use config_agent::watcher::{RawEventKind, RawWatchEvent};
 use config_shared::events::{ChangeKind, Severity};
 use config_shared::ids::HostId;
@@ -66,7 +66,11 @@ async fn debounce_suppresses_burst_to_single_event() {
     }
 
     let flushed = window.flush_all();
-    assert!(flushed.len() <= 1, "Expected at most 1 debounced event from burst, got {}", flushed.len());
+    assert!(
+        flushed.len() <= 1,
+        "Expected at most 1 debounced event from burst, got {}",
+        flushed.len()
+    );
 }
 
 #[test]
@@ -123,7 +127,10 @@ async fn pipeline_snapshot_acquire_detects_new_file() {
         SnapshotDecision::FileCreated { current_hash, .. } => {
             assert!(!current_hash.is_empty());
         }
-        _ => panic!("Expected FileCreated, got {:?}", decision_variant(&decision)),
+        _ => panic!(
+            "Expected FileCreated, got {:?}",
+            decision_variant(&decision)
+        ),
     }
 }
 
@@ -144,20 +151,39 @@ async fn pipeline_snapshot_acquire_detects_changed_file() {
     let event = make_debounced_event(file_path.to_str().unwrap(), ChangeKind::Created);
     let decision = pipeline.snapshot_acquire(&event, &store).await.unwrap();
     match decision {
-        SnapshotDecision::FileCreated { current_hash, current_data } => {
-            let _ = store.write_snapshot(&current_hash, &current_data).await.unwrap();
-            store.set_current_hash(Utf8Path::new(file_path.to_str().unwrap()), &current_hash).unwrap();
+        SnapshotDecision::FileCreated {
+            current_hash,
+            current_data,
+        } => {
+            let _ = store
+                .write_snapshot(&current_hash, &current_data)
+                .await
+                .unwrap();
+            store
+                .set_current_hash(Utf8Path::new(file_path.to_str().unwrap()), &current_hash)
+                .unwrap();
         }
-        _ => panic!("Expected FileCreated, got {:?}", decision_variant(&decision)),
+        _ => panic!(
+            "Expected FileCreated, got {:?}",
+            decision_variant(&decision)
+        ),
     }
 
     std::fs::write(&file_path, "key: new_value\n").unwrap();
     let event2 = make_debounced_event(file_path.to_str().unwrap(), ChangeKind::Modified);
     let decision = pipeline.snapshot_acquire(&event2, &store).await.unwrap();
     match decision {
-        SnapshotDecision::Changed { previous_hash, current_hash, previous_data, .. } => {
+        SnapshotDecision::Changed {
+            previous_hash,
+            current_hash,
+            previous_data,
+            ..
+        } => {
             assert_ne!(previous_hash, current_hash);
-            assert_eq!(previous_data, b"key: value\n", "previous_data should contain the old file content");
+            assert_eq!(
+                previous_data, b"key: value\n",
+                "previous_data should contain the old file content"
+            );
         }
         _ => panic!("Expected Changed, got {:?}", decision_variant(&decision)),
     }
@@ -180,9 +206,17 @@ async fn pipeline_snapshot_acquire_detects_unchanged_file() {
     let event = make_debounced_event(file_path.to_str().unwrap(), ChangeKind::Created);
     let decision = pipeline.snapshot_acquire(&event, &store).await.unwrap();
     match decision {
-        SnapshotDecision::FileCreated { current_hash, current_data } => {
-            let _ = store.write_snapshot(&current_hash, &current_data).await.unwrap();
-            store.set_current_hash(Utf8Path::new(file_path.to_str().unwrap()), &current_hash).unwrap();
+        SnapshotDecision::FileCreated {
+            current_hash,
+            current_data,
+        } => {
+            let _ = store
+                .write_snapshot(&current_hash, &current_data)
+                .await
+                .unwrap();
+            store
+                .set_current_hash(Utf8Path::new(file_path.to_str().unwrap()), &current_hash)
+                .unwrap();
         }
         _ => panic!("Expected FileCreated"),
     }
@@ -209,9 +243,17 @@ async fn pipeline_snapshot_acquire_detects_deleted_file() {
     let event = make_debounced_event(file_path.to_str().unwrap(), ChangeKind::Created);
     let decision = pipeline.snapshot_acquire(&event, &store).await.unwrap();
     match decision {
-        SnapshotDecision::FileCreated { current_hash, current_data } => {
-            let _ = store.write_snapshot(&current_hash, &current_data).await.unwrap();
-            store.set_current_hash(Utf8Path::new(file_path.to_str().unwrap()), &current_hash).unwrap();
+        SnapshotDecision::FileCreated {
+            current_hash,
+            current_data,
+        } => {
+            let _ = store
+                .write_snapshot(&current_hash, &current_data)
+                .await
+                .unwrap();
+            store
+                .set_current_hash(Utf8Path::new(file_path.to_str().unwrap()), &current_hash)
+                .unwrap();
         }
         _ => panic!("Expected FileCreated"),
     }
@@ -229,7 +271,9 @@ async fn pipeline_diff_generate_produces_diff_output() {
     let pipeline = Pipeline::new(config, host_id);
     let path = Utf8PathBuf::from("/etc/test.yaml");
 
-    let result = pipeline.diff_generate("old: content\n", "new: content\n", &path).await;
+    let result = pipeline
+        .diff_generate("old: content\n", "new: content\n", &path)
+        .await;
     assert!(result.is_ok());
 }
 
@@ -292,7 +336,8 @@ fn pipeline_build_change_event_sets_severity_info_on_large_diff() {
         yaml_lint_findings: vec![],
     });
 
-    let change_event = pipeline.build_change_event(&event, &decision, diff_summary, None, attribution);
+    let change_event =
+        pipeline.build_change_event(&event, &decision, diff_summary, None, attribution);
     assert_eq!(change_event.severity, Severity::Info);
 }
 

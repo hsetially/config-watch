@@ -43,7 +43,9 @@ impl AgentRegistry {
                 pending_queries: DashMap::new(),
             },
         );
-        self.metrics.tunnel_connections_active.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.metrics
+            .tunnel_connections_active
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         tracing::info!(host_id = %host_id, "agent tunnel registered");
     }
 
@@ -56,7 +58,9 @@ impl AgentRegistry {
                     error: Some("agent disconnected".into()),
                 });
             }
-            self.metrics.tunnel_connections_active.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            self.metrics
+                .tunnel_connections_active
+                .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
             tracing::info!(host_id = %host_id, "agent tunnel unregistered");
         }
     }
@@ -87,12 +91,7 @@ impl AgentRegistry {
         Ok(rx)
     }
 
-    pub fn handle_response(
-        &self,
-        host_id: Uuid,
-        request_id: &str,
-        payload: QueryResponsePayload,
-    ) {
+    pub fn handle_response(&self, host_id: Uuid, request_id: &str, payload: QueryResponsePayload) {
         if let Some(conn) = self.connections.get(&host_id) {
             if let Some((_, sender)) = conn.pending_queries.remove(request_id) {
                 let _ = sender.send(payload);
@@ -123,9 +122,8 @@ pub async fn handle_agent_tunnel(socket: WebSocket, state: AppState, host_id: Uu
     let metrics = state.metrics.clone();
 
     let mut send_task = tokio::spawn(async move {
-        let mut ping_interval = tokio::time::interval(
-            std::time::Duration::from_secs(PING_INTERVAL_SECS),
-        );
+        let mut ping_interval =
+            tokio::time::interval(std::time::Duration::from_secs(PING_INTERVAL_SECS));
         ping_interval.tick().await; // skip first immediate tick
 
         loop {
@@ -177,7 +175,9 @@ pub async fn handle_agent_tunnel(socket: WebSocket, state: AppState, host_id: Uu
                                     });
 
                                 registry.handle_response(host_id, request_id, payload);
-                                metrics.tunnel_queries_routed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                metrics
+                                    .tunnel_queries_routed
+                                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             }
                         }
                         TunnelMessageType::Pong => {

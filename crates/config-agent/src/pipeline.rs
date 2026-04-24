@@ -5,9 +5,9 @@ use config_shared::ids::{EventId, HostId, SnapshotId};
 use config_shared::snapshots::{DiffSummary, YamlLintSeverity};
 use config_shared::validation::derive_idempotency_key;
 
+use crate::attribution::AttributionResolver;
 use crate::config::AgentConfig;
 use crate::debounce::DebouncedEvent;
-use crate::attribution::AttributionResolver;
 
 /// Scan all watch roots and snapshot existing files that don't yet have a baseline.
 /// This ensures the first real modification has a proper previous version to diff against.
@@ -52,7 +52,8 @@ pub async fn baseline_scan(
                 continue;
             }
             if config.exclude_globs.iter().any(|pattern| {
-                path.as_str().contains(&pattern.replace("**/", "").replace("*", ""))
+                path.as_str()
+                    .contains(&pattern.replace("**/", "").replace("*", ""))
             }) {
                 continue;
             }
@@ -126,7 +127,11 @@ pub struct Pipeline {
 impl Pipeline {
     pub fn new(config: AgentConfig, host_id: HostId) -> Self {
         let diff_engine = config_diff::difftastic::DiffEngine::with_config(config.diff.clone());
-        Self { config, host_id, diff_engine }
+        Self {
+            config,
+            host_id,
+            diff_engine,
+        }
     }
 
     pub fn canonicalize_and_filter(
@@ -138,9 +143,10 @@ impl Pipeline {
         }
 
         let excluded = self.config.exclude_globs.iter().any(|pattern| {
-            event.raw_path.as_str().contains(
-                &pattern.replace("**/", "").replace("*", ""),
-            )
+            event
+                .raw_path
+                .as_str()
+                .contains(&pattern.replace("**/", "").replace("*", ""))
         });
         if excluded {
             return None;
@@ -158,9 +164,7 @@ impl Pipeline {
 
         match event.event_kind {
             ChangeKind::Deleted => {
-                let prev_hash = snapshot_store
-                    .get_current_hash(path)
-                    .unwrap_or_default();
+                let prev_hash = snapshot_store.get_current_hash(path).unwrap_or_default();
                 if prev_hash.is_empty() {
                     return Ok(SnapshotDecision::Unchanged);
                 }
@@ -173,7 +177,10 @@ impl Pipeline {
                     previous_data,
                 })
             }
-            ChangeKind::Created | ChangeKind::Modified | ChangeKind::MetadataOnly | ChangeKind::PermissionChanged => {
+            ChangeKind::Created
+            | ChangeKind::Modified
+            | ChangeKind::MetadataOnly
+            | ChangeKind::PermissionChanged => {
                 if !path.exists() {
                     return Ok(SnapshotDecision::Unchanged);
                 }
@@ -181,9 +188,7 @@ impl Pipeline {
                 let content = tokio::fs::read(path).await?;
                 let current_hash = config_snapshot::hash::compute_blake3(&content);
 
-                let prev_hash = snapshot_store
-                    .get_current_hash(path)
-                    .unwrap_or_default();
+                let prev_hash = snapshot_store.get_current_hash(path).unwrap_or_default();
 
                 if prev_hash == current_hash {
                     return Ok(SnapshotDecision::Unchanged);
@@ -261,7 +266,10 @@ impl Pipeline {
                 Some(SnapshotId::new()),
                 Some(current_data),
             ),
-            SnapshotDecision::FileCreated { current_hash, current_data } => (
+            SnapshotDecision::FileCreated {
+                current_hash,
+                current_data,
+            } => (
                 String::new(),
                 current_hash.clone(),
                 None,
@@ -283,7 +291,9 @@ impl Pipeline {
             .map(|data| crate::yaml_lint::lint_yaml(data))
             .unwrap_or_default();
 
-        let has_critical_lint = lint_findings.iter().any(|f| f.severity == YamlLintSeverity::Critical);
+        let has_critical_lint = lint_findings
+            .iter()
+            .any(|f| f.severity == YamlLintSeverity::Critical);
 
         // Merge lint findings into diff_summary
         let diff_summary = if lint_findings.is_empty() {

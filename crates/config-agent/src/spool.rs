@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
 use camino::Utf8PathBuf;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use config_shared::events::ChangeEvent;
@@ -61,8 +61,8 @@ impl SpoolWriter {
         };
 
         let file_path = self.event_path(&event.event_id);
-        let json = serde_json::to_string(&entry)
-            .with_context(|| "failed to serialize spool entry")?;
+        let json =
+            serde_json::to_string(&entry).with_context(|| "failed to serialize spool entry")?;
         tokio::fs::write(&file_path, json)
             .await
             .with_context(|| format!("failed to write spool entry: {}", file_path))?;
@@ -106,7 +106,8 @@ impl SpoolWriter {
     pub async fn pending_entries(&self) -> Result<Vec<SpoolEntry>> {
         let pending_dir = self.spool_dir.join("pending");
         let mut entries = Vec::new();
-        let mut read_dir = tokio::fs::read_dir(&pending_dir).await
+        let mut read_dir = tokio::fs::read_dir(&pending_dir)
+            .await
             .with_context(|| format!("failed to read pending dir: {}", pending_dir))?;
 
         while let Some(entry) = read_dir.next_entry().await? {
@@ -127,7 +128,9 @@ impl SpoolWriter {
     }
 
     fn event_path(&self, event_id: &EventId) -> Utf8PathBuf {
-        self.spool_dir.join("pending").join(format!("{}.jsonl", event_id))
+        self.spool_dir
+            .join("pending")
+            .join(format!("{}.jsonl", event_id))
     }
 
     fn index_path(&self) -> Utf8PathBuf {
@@ -214,9 +217,9 @@ impl SpoolWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use config_shared::attribution::Attribution;
     use config_shared::events::{ChangeEvent, ChangeKind, Severity};
     use config_shared::ids::{EventId, HostId, IdempotencyKey};
-    use config_shared::attribution::Attribution;
 
     fn make_event(id: &str) -> ChangeEvent {
         ChangeEvent {
@@ -260,7 +263,10 @@ mod tests {
 
         let event = make_event("22222222-2222-2222-2222-222222222222");
         writer.append(&event).await.unwrap();
-        writer.mark_failed(&event.event_id, "permanent error").await.unwrap();
+        writer
+            .mark_failed(&event.event_id, "permanent error")
+            .await
+            .unwrap();
 
         let pending = writer.pending_entries().await.unwrap();
         assert!(pending.is_empty());

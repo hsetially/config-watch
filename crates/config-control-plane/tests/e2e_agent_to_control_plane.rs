@@ -52,7 +52,9 @@ async fn e2e_agent_registers_with_control_plane() {
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::OK);
     let hosts = json.get("hosts").unwrap().as_array().unwrap();
-    assert!(hosts.iter().any(|h| h.get("hostname").unwrap().as_str().unwrap() == "e2e-host"));
+    assert!(hosts
+        .iter()
+        .any(|h| h.get("hostname").unwrap().as_str().unwrap() == "e2e-host"));
 }
 
 #[tokio::test]
@@ -73,7 +75,12 @@ async fn e2e_change_event_appears_in_changes_list() {
 
     // Ingest a change event
     let token = make_agent_credential("e2e-secret", &host_id.to_string());
-    let event_body = make_change_event_json(&host_id, "/etc/myapp/config.yaml", "modified", &format!("e2e-change-{}", host_id));
+    let event_body = make_change_event_json(
+        &host_id,
+        "/etc/myapp/config.yaml",
+        "modified",
+        &format!("e2e-change-{}", host_id),
+    );
     let req = Request::builder()
         .method("POST")
         .uri("/v1/events/change")
@@ -113,7 +120,12 @@ async fn e2e_duplicate_change_event_returns_409() {
     send_req(state.clone(), req).await;
 
     let token = make_agent_credential("e2e-secret", &host_id.to_string());
-    let event_body = make_change_event_json(&host_id, "/etc/dupe.yaml", "modified", &format!("e2e-dupe-{}", host_id));
+    let event_body = make_change_event_json(
+        &host_id,
+        "/etc/dupe.yaml",
+        "modified",
+        &format!("e2e-dupe-{}", host_id),
+    );
 
     let req1 = Request::builder()
         .method("POST")
@@ -134,7 +146,12 @@ async fn e2e_duplicate_change_event_returns_409() {
         .unwrap();
     let (status2, json2) = send_req(state, req2).await;
     assert_eq!(status2, StatusCode::CONFLICT);
-    assert!(json2.get("message").unwrap().as_str().unwrap().contains("duplicate"));
+    assert!(json2
+        .get("message")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("duplicate"));
 }
 
 #[tokio::test]
@@ -172,6 +189,12 @@ async fn e2e_host_detail_shows_registered_host() {
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::OK);
     let host = json.get("host").unwrap();
-    assert_eq!(host.get("hostname").unwrap().as_str().unwrap(), "detail-e2e-host");
-    assert_eq!(host.get("environment").unwrap().as_str().unwrap(), "staging");
+    assert_eq!(
+        host.get("hostname").unwrap().as_str().unwrap(),
+        "detail-e2e-host"
+    );
+    assert_eq!(
+        host.get("environment").unwrap().as_str().unwrap(),
+        "staging"
+    );
 }

@@ -2,7 +2,11 @@ use clap::Parser;
 
 #[derive(Debug, Parser)]
 struct Args {
-    #[arg(long, env = "APP_CONFIG", default_value = "deploy/dev/control-plane.toml")]
+    #[arg(
+        long,
+        env = "APP_CONFIG",
+        default_value = "deploy/dev/control-plane.toml"
+    )]
     config: String,
 }
 

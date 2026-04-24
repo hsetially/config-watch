@@ -1,6 +1,6 @@
-use config_auth::tokens::AgentCredential;
 use config_auth::enrollment::EnrollmentVerifier;
 use config_auth::policy;
+use config_auth::tokens::AgentCredential;
 
 #[test]
 fn auth_issue_and_verify_roundtrip() {

@@ -45,7 +45,11 @@ impl RedactionEngine {
                 if self.key_patterns.iter().any(|p| p.is_match(key)) {
                     let after_colon = &line[colon_pos + 1..];
                     let leading_ws = after_colon.len() - after_colon.trim_start().len();
-                    *line = format!("{}:{}[REDACTED]", &line[..colon_pos], &" ".repeat(leading_ws));
+                    *line = format!(
+                        "{}:{}[REDACTED]",
+                        &line[..colon_pos],
+                        &" ".repeat(leading_ws)
+                    );
                 }
             }
         }
@@ -57,7 +61,8 @@ impl RedactionEngine {
         if content.len() <= self.max_preview_bytes {
             content.to_string()
         } else {
-            let end = content.char_indices()
+            let end = content
+                .char_indices()
                 .take_while(|(i, _)| *i < self.max_preview_bytes)
                 .last()
                 .map(|(i, c)| i + c.len_utf8())

@@ -25,7 +25,7 @@ impl HostsRepo {
                  agent_version = EXCLUDED.agent_version,
                  status = 'healthy',
                  last_heartbeat_at = NOW()
-             RETURNING *"
+             RETURNING *",
         )
         .bind(host_id)
         .bind(hostname)
@@ -94,15 +94,20 @@ impl HostsRepo {
     }
 }
 
-pub fn derive_host_status(last_heartbeat: Option<DateTime<Utc>>, heartbeat_interval_secs: u64) -> &'static str {
+pub fn derive_host_status(
+    last_heartbeat: Option<DateTime<Utc>>,
+    heartbeat_interval_secs: u64,
+) -> &'static str {
     let Some(last_hb) = last_heartbeat else {
         return "registering";
     };
     let elapsed = Utc::now() - last_hb;
-    let threshold_2x = chrono::Duration::from_std(std::time::Duration::from_secs(heartbeat_interval_secs * 2))
-        .unwrap_or(chrono::Duration::seconds(60));
-    let threshold_5x = chrono::Duration::from_std(std::time::Duration::from_secs(heartbeat_interval_secs * 5))
-        .unwrap_or(chrono::Duration::seconds(150));
+    let threshold_2x =
+        chrono::Duration::from_std(std::time::Duration::from_secs(heartbeat_interval_secs * 2))
+            .unwrap_or(chrono::Duration::seconds(60));
+    let threshold_5x =
+        chrono::Duration::from_std(std::time::Duration::from_secs(heartbeat_interval_secs * 5))
+            .unwrap_or(chrono::Duration::seconds(150));
 
     if elapsed <= threshold_2x {
         "healthy"

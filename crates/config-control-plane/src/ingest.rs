@@ -21,7 +21,10 @@ impl IngestService {
         snapshot_store: &config_snapshot::store::SnapshotStore,
         body: serde_json::Value,
     ) -> Result<IngestOutcome> {
-        let schema_version = body.get("schema_version").and_then(|v| v.as_str()).unwrap_or("");
+        let schema_version = body
+            .get("schema_version")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         if schema_version != "1.0" {
             return Ok(IngestOutcome::Rejected {
                 reason: format!("unsupported schema version: {}", schema_version),
@@ -30,7 +33,11 @@ impl IngestService {
 
         let event_data = match body.get("event") {
             Some(e) => e,
-            None => return Ok(IngestOutcome::Rejected { reason: "missing event".into() }),
+            None => {
+                return Ok(IngestOutcome::Rejected {
+                    reason: "missing event".into(),
+                })
+            }
         };
 
         let idempotency_key = event_data
@@ -40,17 +47,26 @@ impl IngestService {
             .to_string();
 
         if idempotency_key.is_empty() {
-            return Ok(IngestOutcome::Rejected { reason: "missing idempotency_key".into() });
+            return Ok(IngestOutcome::Rejected {
+                reason: "missing idempotency_key".into(),
+            });
         }
 
-        if config_storage::repositories::change_events::ChangeEventsRepo::exists_by_idempotency_key(pool, &idempotency_key).await? {
+        if config_storage::repositories::change_events::ChangeEventsRepo::exists_by_idempotency_key(
+            pool,
+            &idempotency_key,
+        )
+        .await?
+        {
             let existing = sqlx::query_as::<_, (Uuid,)>(
-                "SELECT event_id FROM change_events WHERE idempotency_key = $1"
+                "SELECT event_id FROM change_events WHERE idempotency_key = $1",
             )
             .bind(&idempotency_key)
             .fetch_one(pool)
             .await?;
-            return Ok(IngestOutcome::Duplicate { event_id: existing.0 });
+            return Ok(IngestOutcome::Duplicate {
+                event_id: existing.0,
+            });
         }
 
         let event_id = event_data
@@ -82,7 +98,7 @@ impl IngestService {
             match sqlx::query_scalar::<_, Option<Uuid>>(
                 "SELECT current_snapshot_id FROM change_events
                  WHERE host_id = $1 AND canonical_path = $2
-                 ORDER BY event_time DESC LIMIT 1"
+                 ORDER BY event_time DESC LIMIT 1",
             )
             .bind(host_id)
             .bind(&canonical_path)
@@ -183,14 +199,13 @@ impl IngestService {
 
         config_storage::repositories::change_events::ChangeEventsRepo::insert(pool, &row).await?;
 
-        let host_env = sqlx::query_as::<_, (String,)>(
-            "SELECT environment FROM hosts WHERE host_id = $1"
-        )
-        .bind(host_id)
-        .fetch_optional(pool)
-        .await?
-        .map(|r| r.0)
-        .unwrap_or_default();
+        let host_env =
+            sqlx::query_as::<_, (String,)>("SELECT environment FROM hosts WHERE host_id = $1")
+                .bind(host_id)
+                .fetch_optional(pool)
+                .await?
+                .map(|r| r.0)
+                .unwrap_or_default();
 
         let msg = RealtimeMessage {
             event_id: row.event_id,

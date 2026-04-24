@@ -708,7 +708,11 @@ fn render_full_file(
         // Context lines
         while prev_idx < prev_target && curr_idx < curr_target {
             if prev_idx < prev_lines.len() && curr_idx < curr_lines.len() {
-                render.push_str(&format!("{:>4} |  {}\n", curr_idx + 1, curr_lines[curr_idx]));
+                render.push_str(&format!(
+                    "{:>4} |  {}\n",
+                    curr_idx + 1,
+                    curr_lines[curr_idx]
+                ));
             }
             prev_idx += 1;
             curr_idx += 1;
@@ -739,7 +743,11 @@ fn render_full_file(
 
     // Remaining context
     while prev_idx < prev_lines.len() && curr_idx < curr_lines.len() {
-        render.push_str(&format!("{:>4} |  {}\n", curr_idx + 1, curr_lines[curr_idx]));
+        render.push_str(&format!(
+            "{:>4} |  {}\n",
+            curr_idx + 1,
+            curr_lines[curr_idx]
+        ));
         prev_idx += 1;
         curr_idx += 1;
     }
@@ -988,7 +996,10 @@ mod tests {
                 added,
                 removed,
             } => {
-                assert!(render.contains(FORMAT_PREFIX_UNIFIED), "should have format prefix");
+                assert!(
+                    render.contains(FORMAT_PREFIX_UNIFIED),
+                    "should have format prefix"
+                );
                 assert!(render.contains(" | +key: new"));
                 assert_eq!(added, 1);
                 assert_eq!(removed, 1);

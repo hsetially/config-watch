@@ -30,9 +30,12 @@ impl AgentQueryClient {
 
     pub async fn query_stat(&self, agent_addr: &str, path: &str) -> Result<serde_json::Value> {
         let url = format!("http://{}/v1/query/file-metadata", agent_addr);
-        let body = FileStatRequest { path: path.to_string() };
+        let body = FileStatRequest {
+            path: path.to_string(),
+        };
 
-        let resp = self.http
+        let resp = self
+            .http
             .post(&url)
             .json(&body)
             .send()
@@ -47,14 +50,19 @@ impl AgentQueryClient {
             anyhow::bail!("agent stat query failed: HTTP {}", status);
         }
 
-        resp.json::<serde_json::Value>().await.context("failed to parse stat response")
+        resp.json::<serde_json::Value>()
+            .await
+            .context("failed to parse stat response")
     }
 
     pub async fn query_preview(&self, agent_addr: &str, path: &str) -> Result<serde_json::Value> {
         let url = format!("http://{}/v1/query/file-preview", agent_addr);
-        let body = FilePreviewRequest { path: path.to_string() };
+        let body = FilePreviewRequest {
+            path: path.to_string(),
+        };
 
-        let resp = self.http
+        let resp = self
+            .http
             .post(&url)
             .json(&body)
             .send()
@@ -69,7 +77,9 @@ impl AgentQueryClient {
             anyhow::bail!("agent preview query failed: HTTP {}", status);
         }
 
-        resp.json::<serde_json::Value>().await.context("failed to parse preview response")
+        resp.json::<serde_json::Value>()
+            .await
+            .context("failed to parse preview response")
     }
 
     pub async fn query_content(
@@ -88,7 +98,8 @@ impl AgentQueryClient {
             body["limit"] = serde_json::Value::Number(lim.into());
         }
 
-        let resp = self.http
+        let resp = self
+            .http
             .post(&url)
             .json(&body)
             .send()
@@ -106,6 +117,8 @@ impl AgentQueryClient {
             anyhow::bail!("agent content query failed: HTTP {}", status);
         }
 
-        resp.json::<serde_json::Value>().await.context("failed to parse content response")
+        resp.json::<serde_json::Value>()
+            .await
+            .context("failed to parse content response")
     }
 }

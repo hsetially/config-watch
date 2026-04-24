@@ -8,13 +8,14 @@ use config_storage::db::Database;
 
 #[allow(dead_code)]
 pub async fn setup_test_db() -> PgPool {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/config_watch_test".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://postgres:postgres@localhost:5432/config_watch_test".to_string()
+    });
 
-    let db = Database::connect(&database_url).await
+    let db = Database::connect(&database_url)
+        .await
         .expect("failed to connect to test database");
-    db.run_migrations().await
-        .expect("failed to run migrations");
+    db.run_migrations().await.expect("failed to run migrations");
     db.pool().clone()
 }
 
@@ -22,34 +23,37 @@ pub async fn setup_test_db() -> PgPool {
 pub fn make_app_state(pool: sqlx::PgPool, secret: &str) -> AppState {
     let db = Database::from_pool(pool);
     let tmp = tempfile::tempdir().expect("create temp dir");
-    let snapshot_store = config_snapshot::store::SnapshotStore::new(camino::Utf8Path::new(tmp.path().join("snapshots").to_str().unwrap())).expect("create snapshot store");
+    let snapshot_store = config_snapshot::store::SnapshotStore::new(camino::Utf8Path::new(
+        tmp.path().join("snapshots").to_str().unwrap(),
+    ))
+    .expect("create snapshot store");
     AppState::new(db, secret.to_string(), snapshot_store)
 }
 
 #[allow(dead_code)]
-pub fn make_app_state_with_broadcast_capacity(pool: sqlx::PgPool, secret: &str, capacity: usize) -> AppState {
+pub fn make_app_state_with_broadcast_capacity(
+    pool: sqlx::PgPool,
+    secret: &str,
+    capacity: usize,
+) -> AppState {
     let db = Database::from_pool(pool);
     let tmp = tempfile::tempdir().expect("create temp dir");
-    let snapshot_store = config_snapshot::store::SnapshotStore::new(camino::Utf8Path::new(tmp.path().join("snapshots").to_str().unwrap())).expect("create snapshot store");
+    let snapshot_store = config_snapshot::store::SnapshotStore::new(camino::Utf8Path::new(
+        tmp.path().join("snapshots").to_str().unwrap(),
+    ))
+    .expect("create snapshot store");
     AppState::with_broadcast_capacity(db, secret.to_string(), capacity, snapshot_store)
 }
 
 #[allow(dead_code)]
 pub fn make_agent_credential(secret: &str, host_id: &str) -> String {
-    config_auth::tokens::AgentCredential::issue(
-        secret,
-        host_id,
-        chrono::Duration::hours(24),
-    ).token
+    config_auth::tokens::AgentCredential::issue(secret, host_id, chrono::Duration::hours(24)).token
 }
 
 #[allow(dead_code)]
 pub fn make_expired_credential(secret: &str, host_id: &str) -> String {
-    config_auth::tokens::AgentCredential::issue(
-        secret,
-        host_id,
-        chrono::Duration::seconds(-1),
-    ).token
+    config_auth::tokens::AgentCredential::issue(secret, host_id, chrono::Duration::seconds(-1))
+        .token
 }
 
 #[allow(dead_code)]

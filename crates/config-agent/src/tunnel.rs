@@ -2,9 +2,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
-use tokio_tungstenite::{tungstenite::client::IntoClientRequest, connect_async};
+use tokio_tungstenite::{connect_async, tungstenite::client::IntoClientRequest};
 
-use config_transport::tunnel::{QueryKind, QueryRequestPayload, QueryResponsePayload, TunnelMessage, TunnelMessageType};
+use config_transport::tunnel::{
+    QueryKind, QueryRequestPayload, QueryResponsePayload, TunnelMessage, TunnelMessageType,
+};
 
 use crate::config::AgentConfig;
 use crate::query_handler::QueryHandler;
@@ -16,7 +18,10 @@ pub struct AgentTunnel {
 
 impl AgentTunnel {
     pub fn new(config: AgentConfig, query_handler: Arc<QueryHandler>) -> Self {
-        Self { config, query_handler }
+        Self {
+            config,
+            query_handler,
+        }
     }
 
     pub async fn run(&self, auth_token: String) {
@@ -79,12 +84,14 @@ impl AgentTunnel {
                             let response = self.handle_query(&payload).await;
                             let msg = TunnelMessage::query_response(request_id, response);
                             let json = serde_json::to_string(&msg)?;
-                            sink.send(tokio_tungstenite::tungstenite::Message::Text(json)).await?;
+                            sink.send(tokio_tungstenite::tungstenite::Message::Text(json))
+                                .await?;
                         }
                         TunnelMessageType::Ping => {
                             let pong = TunnelMessage::pong();
                             let json = serde_json::to_string(&pong)?;
-                            sink.send(tokio_tungstenite::tungstenite::Message::Text(json)).await?;
+                            sink.send(tokio_tungstenite::tungstenite::Message::Text(json))
+                                .await?;
                         }
                         TunnelMessageType::Pong => {
                             tracing::trace!("tunnel pong received");
@@ -107,15 +114,13 @@ impl AgentTunnel {
 
     async fn handle_query(&self, request: &QueryRequestPayload) -> QueryResponsePayload {
         match request.kind {
-            QueryKind::Stat => {
-                map_query_result(self.query_handler.stat(&request.path).await)
-            }
-            QueryKind::Preview => {
-                map_query_result(self.query_handler.preview(&request.path))
-            }
-            QueryKind::Content => {
-                map_query_result(self.query_handler.content(&request.path, request.offset, request.limit))
-            }
+            QueryKind::Stat => map_query_result(self.query_handler.stat(&request.path).await),
+            QueryKind::Preview => map_query_result(self.query_handler.preview(&request.path)),
+            QueryKind::Content => map_query_result(self.query_handler.content(
+                &request.path,
+                request.offset,
+                request.limit,
+            )),
         }
     }
 }
@@ -129,7 +134,11 @@ fn map_query_result<T: serde::Serialize>(result: anyhow::Result<T>) -> QueryResp
         },
         Err(e) => {
             let msg = e.to_string();
-            let status = if msg.contains("denied") { "denied" } else { "error" };
+            let status = if msg.contains("denied") {
+                "denied"
+            } else {
+                "error"
+            };
             QueryResponsePayload {
                 status: status.into(),
                 data: None,

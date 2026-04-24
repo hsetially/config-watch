@@ -16,7 +16,10 @@ pub struct AgentAuth {
 impl FromRequestParts<AppState> for AgentAuth {
     type Rejection = Response;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         let token = parts
             .headers
             .get("X-Agent-Token")
@@ -31,7 +34,10 @@ impl FromRequestParts<AppState> for AgentAuth {
 
         // Verify the HMAC credential
         match config_auth::tokens::AgentCredential::verify(&state.secret, &token) {
-            Ok(cred) => Ok(Self { host_id: cred.host_id, token }),
+            Ok(cred) => Ok(Self {
+                host_id: cred.host_id,
+                token,
+            }),
             Err(e) => {
                 tracing::warn!(error = e, "agent auth failed");
                 Err((StatusCode::UNAUTHORIZED, e).into_response())
@@ -57,7 +63,10 @@ pub struct OperatorAuth {
 impl FromRequestParts<AppState> for OperatorAuth {
     type Rejection = Response;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         let token = parts
             .headers
             .get("Authorization")
@@ -95,7 +104,10 @@ pub struct CorrelationId(pub Uuid);
 impl FromRequestParts<AppState> for CorrelationId {
     type Rejection = Response;
 
-    async fn from_request_parts(parts: &mut Parts, _state: &AppState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         let id = parts
             .headers
             .get("X-Correlation-ID")

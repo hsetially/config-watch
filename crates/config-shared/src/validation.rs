@@ -1,5 +1,5 @@
-use chrono::{DateTime, Utc};
 use camino::{Utf8Path, Utf8PathBuf};
+use chrono::{DateTime, Utc};
 
 use crate::ids::{HostId, IdempotencyKey};
 
@@ -30,7 +30,12 @@ pub fn derive_idempotency_key(
 
     let bucket = time_bucket.format("%Y%m%d%H%M");
     let mut s = String::with_capacity(128);
-    write!(s, "{}:{}:{}:{}:{}", host_id, path, prev_hash, curr_hash, bucket).unwrap();
+    write!(
+        s,
+        "{}:{}:{}:{}:{}",
+        host_id, path, prev_hash, curr_hash, bucket
+    )
+    .unwrap();
     IdempotencyKey(s)
 }
 
@@ -50,13 +55,19 @@ mod tests {
     #[test]
     fn validate_path_in_roots_matches() {
         let roots = vec![Utf8PathBuf::from("/etc/myapp")];
-        assert!(validate_path_in_roots(Utf8Path::new("/etc/myapp/config.yaml"), &roots));
+        assert!(validate_path_in_roots(
+            Utf8Path::new("/etc/myapp/config.yaml"),
+            &roots
+        ));
     }
 
     #[test]
     fn validate_path_in_roots_rejects() {
         let roots = vec![Utf8PathBuf::from("/etc/myapp")];
-        assert!(!validate_path_in_roots(Utf8Path::new("/etc/other/config.yaml"), &roots));
+        assert!(!validate_path_in_roots(
+            Utf8Path::new("/etc/other/config.yaml"),
+            &roots
+        ));
     }
 
     #[test]

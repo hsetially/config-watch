@@ -57,7 +57,12 @@ async fn register_invalid_enrollment_token_returns_401() {
         .unwrap();
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("invalid enrollment token"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("invalid enrollment token"));
 }
 
 #[tokio::test]
@@ -76,7 +81,12 @@ async fn register_missing_host_id_returns_400() {
         .unwrap();
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("missing host_id"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("missing host_id"));
 }
 
 #[tokio::test]
@@ -226,7 +236,12 @@ async fn change_ingest_wrong_schema_version_returns_400() {
         .unwrap();
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("unsupported schema version"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("unsupported schema version"));
 }
 
 #[tokio::test]
@@ -244,7 +259,12 @@ async fn change_ingest_missing_event_returns_400() {
         .unwrap();
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("missing event"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("missing event"));
 }
 
 #[tokio::test]
@@ -269,7 +289,12 @@ async fn change_ingest_missing_idempotency_key_returns_400() {
         .unwrap();
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("missing idempotency_key"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("missing idempotency_key"));
 }
 
 #[tokio::test]
@@ -290,7 +315,12 @@ async fn change_ingest_valid_returns_201() {
     assert_eq!(reg_status, StatusCode::CREATED);
 
     let token = make_agent_credential("test-secret", &host_id.to_string());
-    let body = make_change_event_json(&host_id, "/etc/test.yaml", "modified", &format!("key-{}", host_id));
+    let body = make_change_event_json(
+        &host_id,
+        "/etc/test.yaml",
+        "modified",
+        &format!("key-{}", host_id),
+    );
     let req = Request::builder()
         .method("POST")
         .uri("/v1/events/change")
@@ -320,7 +350,12 @@ async fn change_ingest_duplicate_returns_409() {
     send_req(state.clone(), req).await;
 
     let token = make_agent_credential("test-secret", &host_id.to_string());
-    let body = make_change_event_json(&host_id, "/etc/dupe.yaml", "modified", &format!("dupe-key-{}", host_id));
+    let body = make_change_event_json(
+        &host_id,
+        "/etc/dupe.yaml",
+        "modified",
+        &format!("dupe-key-{}", host_id),
+    );
 
     // First request: 201
     let req1 = Request::builder()
@@ -343,7 +378,12 @@ async fn change_ingest_duplicate_returns_409() {
         .unwrap();
     let (status2, json2) = send_req(state, req2).await;
     assert_eq!(status2, StatusCode::CONFLICT);
-    assert!(json2.get("message").unwrap().as_str().unwrap().contains("duplicate"));
+    assert!(json2
+        .get("message")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("duplicate"));
 }
 
 // --- Hosts tests ---
@@ -385,7 +425,12 @@ async fn host_detail_nonexistent_returns_404() {
         .unwrap();
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("host not found"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("host not found"));
 }
 
 #[tokio::test]
@@ -412,7 +457,15 @@ async fn host_detail_existing_returns_200() {
         .unwrap();
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(json.get("host").unwrap().get("hostname").unwrap().as_str().unwrap(), "detail-host");
+    assert_eq!(
+        json.get("host")
+            .unwrap()
+            .get("hostname")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "detail-host"
+    );
 }
 
 // --- Changes tests ---
@@ -442,7 +495,12 @@ async fn change_detail_nonexistent_returns_404() {
         .unwrap();
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("event not found"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("event not found"));
 }
 
 // --- Metrics tests ---
@@ -474,7 +532,12 @@ async fn file_stat_missing_host_id_returns_400() {
         .unwrap();
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("missing host_id"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("missing host_id"));
 }
 
 #[tokio::test]
@@ -490,7 +553,12 @@ async fn file_stat_missing_path_returns_400() {
         .unwrap();
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("missing path"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("missing path"));
 }
 
 #[tokio::test]
@@ -506,7 +574,12 @@ async fn file_stat_host_not_found_returns_404() {
         .unwrap();
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("host not found"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("host not found"));
 }
 
 #[tokio::test]
@@ -515,8 +588,12 @@ async fn file_stat_host_offline_returns_503() {
     let host_id = Uuid::new_v4();
     let pool = state.db.pool().clone();
 
-    db_helpers::seed_host(&pool, host_id, "offline-host", "default").await.unwrap();
-    db_helpers::set_host_status(&pool, host_id, "offline").await.unwrap();
+    db_helpers::seed_host(&pool, host_id, "offline-host", "default")
+        .await
+        .unwrap();
+    db_helpers::set_host_status(&pool, host_id, "offline")
+        .await
+        .unwrap();
 
     let body = file_stat_body(&host_id, "/etc/test.yaml");
     let req = Request::builder()
@@ -527,7 +604,12 @@ async fn file_stat_host_offline_returns_503() {
         .unwrap();
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("host is offline"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("host is offline"));
 }
 
 #[tokio::test]
@@ -542,5 +624,10 @@ async fn file_preview_missing_host_id_returns_400() {
         .unwrap();
     let (status, json) = send_req(state, req).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(json.get("error").unwrap().as_str().unwrap().contains("missing host_id"));
+    assert!(json
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("missing host_id"));
 }

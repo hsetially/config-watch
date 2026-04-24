@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 
-use crate::api::{AgentState, build_agent_router};
+use crate::api::{build_agent_router, AgentState};
 use crate::config::AgentConfig;
 use crate::debounce::DebounceWindow;
 use crate::pipeline::Pipeline;
@@ -53,7 +53,9 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
     );
 
     match publisher.register(serde_json::json!({})).await {
-        Ok(resp) => tracing::info!(credential_expires = ?resp.credential_expires_at, "registered with control plane"),
+        Ok(resp) => {
+            tracing::info!(credential_expires = ?resp.credential_expires_at, "registered with control plane")
+        }
         Err(e) => tracing::warn!(error = %e, "registration failed, will retry on heartbeat"),
     }
 
@@ -61,7 +63,10 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
     let pending = spool.pending_entries().await?;
     for entry in &pending {
         tracing::info!(event_id = %entry.event.event_id, "replaying spool entry");
-        match publisher.publish(&entry.event, &entry.event.idempotency_key).await {
+        match publisher
+            .publish(&entry.event, &entry.event.idempotency_key)
+            .await
+        {
             Ok(_) => {
                 if let Err(e) = spool.mark_delivered(&entry.event.event_id).await {
                     tracing::warn!(error = %e, "failed to mark replayed event delivered");
@@ -72,7 +77,11 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
     }
 
     // Spawn agent query API server
-    let watch_roots: Vec<String> = cfg.watch_roots.iter().map(|r| r.root_path.to_string()).collect();
+    let watch_roots: Vec<String> = cfg
+        .watch_roots
+        .iter()
+        .map(|r| r.root_path.to_string())
+        .collect();
     let query_handler = Arc::new(QueryHandler::new(
         watch_roots,
         cfg.redaction_patterns.clone(),

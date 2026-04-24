@@ -1,13 +1,8 @@
 use std::path::Path;
 
-const DENIED_PREFIXES: &[&str] = &[
-    "/etc/ssl",
-    "/etc/ssh",
-];
+const DENIED_PREFIXES: &[&str] = &["/etc/ssl", "/etc/ssh"];
 
-const DENIED_SEGMENTS: &[&str] = &[
-    "private",
-];
+const DENIED_SEGMENTS: &[&str] = &["private"];
 
 pub fn is_path_denied(path: &str) -> bool {
     let p = Path::new(path);
