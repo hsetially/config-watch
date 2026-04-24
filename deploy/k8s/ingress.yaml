@@ -1,0 +1,55 @@
+# Single GCE Ingress fronts the whole namespace:
+#   /v1/* → control-plane (HTTP + WebSocket for /v1/changes/stream)
+#   /*    → dashboard (static SPA)
+#
+# No TLS is configured here because no custom domain is assumed. Once a DNS name
+# is pointed at the Ingress IP, uncomment the ManagedCertificate block at the
+# bottom and the tls/host fields to enable HTTPS.
+#
+# After applying, wait for an external IP:
+#   kubectl -n config-watch get ingress config-watch -w
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: config-watch
+  namespace: config-watch
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: control-plane
+                port:
+                  number: 8082
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dashboard
+                port:
+                  number: 8080
+
+# ---
+# # Uncomment and set spec.domains[0] to your real domain once DNS is in place.
+# apiVersion: networking.gke.io/v1
+# kind: ManagedCertificate
+# metadata:
+#   name: config-watch
+#   namespace: config-watch
+# spec:
+#   domains:
+#     - config-watch.example.com
+# ---
+# # Then re-apply the Ingress above with:
+# #   annotations:
+# #     networking.gke.io/managed-certificates: "config-watch"
+# #     kubernetes.io/ingress.class: "gce"
+# #   spec:
+# #     rules:
+# #       - host: config-watch.example.com
+# #         http: ...

@@ -1,0 +1,123 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: control-plane-config
+  namespace: config-watch
+type: Opaque
+stringData:
+  # Replace CHANGE_ME values before applying. Both the DB password here and in
+  # postgres-credentials Secret must match.
+  control-plane.toml: |
+    bind_addr = "0.0.0.0:8082"
+    database_url = "postgres://postgres:CHANGE_ME_POSTGRES_PASSWORD@postgres.config-watch.svc.cluster.local:5432/config_watch"
+    control_plane_secret = "CHANGE_ME_CONTROL_PLANE_SECRET"
+    query_timeout_secs = 10
+    snapshot_data_dir = "/var/lib/config-watch/snapshots"
+    repos_dir = "/var/lib/config-watch/repos"
+    github_token = ""
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: control-plane-backend
+  namespace: config-watch
+spec:
+  # Long timeout keeps WebSocket streams (/v1/changes/stream) alive behind the GCE LB.
+  timeoutSec: 3600
+  connectionDraining:
+    drainingTimeoutSec: 30
+  healthCheck:
+    type: HTTP
+    requestPath: /v1/metrics
+    port: 8082
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: control-plane
+  namespace: config-watch
+  annotations:
+    cloud.google.com/backend-config: '{"default": "control-plane-backend"}'
+  labels:
+    app: control-plane
+spec:
+  type: ClusterIP
+  selector:
+    app: control-plane
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-plane
+  namespace: config-watch
+  labels:
+    app: control-plane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: control-plane
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: control-plane
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: control-plane
+          # Replace OWNER/TAG before applying. Prefer the immutable
+          # <version>-sha-<short> tag over :latest for reproducible rollouts.
+          image: ghcr.io/OWNER/config-watch-control-plane:TAG
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+              name: http
+          env:
+            - name: RUST_LOG
+              value: info
+          volumeMounts:
+            - name: config
+              mountPath: /etc/config-watch
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/config-watch
+          readinessProbe:
+            httpGet:
+              path: /v1/metrics
+              port: 8082
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v1/metrics
+              port: 8082
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+      volumes:
+        - name: config
+          secret:
+            secretName: control-plane-config
+            defaultMode: 0440
+        # Snapshots/repos cache — lost on pod restart. Swap for a PVC if you need durability.
+        - name: data
+          emptyDir: {}

@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1.6
+#
+# Builds the config-control-plane binary and packages it on a slim debian runtime.
+# Built and pushed by .github/workflows/docker-publish.yml.
+
+FROM rust:1.82-bookworm AS builder
+WORKDIR /src
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      pkg-config \
+      cmake \
+      ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY . .
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/target \
+    cargo build --release -p config-control-plane \
+ && mkdir -p /out \
+ && cp target/release/config-control-plane /out/config-control-plane
+
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates libssl3 \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 10001 app \
+ && useradd  --system --uid 10001 --gid 10001 --home-dir /var/lib/config-watch --no-create-home app \
+ && mkdir -p /var/lib/config-watch/snapshots /var/lib/config-watch/repos /etc/config-watch \
+ && chown -R app:app /var/lib/config-watch /etc/config-watch
+
+COPY --from=builder /out/config-control-plane /usr/local/bin/config-control-plane
+
+USER 10001:10001
+EXPOSE 8082
+
+ENTRYPOINT ["/usr/local/bin/config-control-plane"]
+CMD ["--config", "/etc/config-watch/control-plane.toml"]

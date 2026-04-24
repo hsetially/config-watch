@@ -1,0 +1,16 @@
+.git
+.github
+target
+dist
+node_modules
+data
+fixtures/diff-cases
+Dockerfile
+docker/
+docs/
+deploy/
+*.md
+*.log
+.vscode
+.idea
+.claude

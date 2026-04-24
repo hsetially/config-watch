@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1.6
+#
+# Builds the WASM dashboard with trunk and serves it through a non-root nginx.
+# Built and pushed by .github/workflows/docker-publish.yml.
+
+FROM rust:1.82-bookworm AS builder
+WORKDIR /src
+
+RUN rustup target add wasm32-unknown-unknown \
+ && cargo install --locked trunk@0.21.7 wasm-bindgen-cli
+
+COPY . .
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/target \
+    cd web/dashboard \
+ && trunk build --release --public-url /
+
+# nginxinc/nginx-unprivileged runs as UID 101 and listens on :8080 by default.
+FROM nginxinc/nginx-unprivileged:1.27-alpine
+
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /src/web/dashboard/dist /usr/share/nginx/html
+
+EXPOSE 8080

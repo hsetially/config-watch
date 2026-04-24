@@ -1,0 +1,169 @@
+name: Publish Docker Images
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "crates/**"
+      - "web/dashboard/**"
+      - "docker/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/docker-publish.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  REGISTRY: ghcr.io
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  resolve:
+    name: Resolve version & image refs
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      owner_lc: ${{ steps.owner.outputs.owner_lc }}
+      short_sha: ${{ steps.sha.outputs.short_sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read workspace version from Cargo.toml
+        id: version
+        shell: bash
+        run: |
+          ver=$(awk -F\" '/^\[workspace.package\]/{flag=1; next} flag && /^version[[:space:]]*=/{print $2; exit}' Cargo.toml)
+          if [ -z "$ver" ]; then
+            echo "Failed to read [workspace.package].version from Cargo.toml" >&2
+            exit 1
+          fi
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "Version: $ver"
+
+      - name: Lowercase repo owner
+        id: owner
+        shell: bash
+        run: echo "owner_lc=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Short SHA
+        id: sha
+        shell: bash
+        run: echo "short_sha=$(echo '${{ github.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+  build-control-plane:
+    name: Build & push control-plane
+    needs: [resolve]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: tags
+        shell: bash
+        run: |
+          image="${{ env.REGISTRY }}/${{ needs.resolve.outputs.owner_lc }}/config-watch-control-plane"
+          ver="${{ needs.resolve.outputs.version }}"
+          sha="${{ needs.resolve.outputs.short_sha }}"
+          {
+            echo "tags<<EOF"
+            echo "${image}:${ver}"
+            echo "${image}:${ver}-sha-${sha}"
+            echo "${image}:sha-${sha}"
+            echo "${image}:latest"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.control-plane
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=control-plane
+          cache-to: type=gha,scope=control-plane,mode=max
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.resolve.outputs.version }}
+
+  build-dashboard:
+    name: Build & push dashboard
+    needs: [resolve]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: tags
+        shell: bash
+        run: |
+          image="${{ env.REGISTRY }}/${{ needs.resolve.outputs.owner_lc }}/config-watch-dashboard"
+          ver="${{ needs.resolve.outputs.version }}"
+          sha="${{ needs.resolve.outputs.short_sha }}"
+          {
+            echo "tags<<EOF"
+            echo "${image}:${ver}"
+            echo "${image}:${ver}-sha-${sha}"
+            echo "${image}:sha-${sha}"
+            echo "${image}:latest"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.dashboard
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=dashboard
+          cache-to: type=gha,scope=dashboard,mode=max
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.resolve.outputs.version }}
+
+  summary:
+    name: Publish summary
+    needs: [resolve, build-control-plane, build-dashboard]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print image refs
+        shell: bash
+        run: |
+          image_cp="${{ env.REGISTRY }}/${{ needs.resolve.outputs.owner_lc }}/config-watch-control-plane"
+          image_db="${{ env.REGISTRY }}/${{ needs.resolve.outputs.owner_lc }}/config-watch-dashboard"
+          ver="${{ needs.resolve.outputs.version }}"
+          sha="${{ needs.resolve.outputs.short_sha }}"
+          {
+            echo "### Published images"
+            echo ""
+            echo "| Image | Unique tag | Version tag |"
+            echo "|---|---|---|"
+            echo "| control-plane | \`${image_cp}:${ver}-sha-${sha}\` | \`${image_cp}:${ver}\` |"
+            echo "| dashboard     | \`${image_db}:${ver}-sha-${sha}\` | \`${image_db}:${ver}\` |"
+            echo ""
+            echo "> The \`${ver}\` tag is mutable. Pin to the \`-sha-${sha}\` tag or the digest for reproducible deploys. Bump \`[workspace.package].version\` in \`Cargo.toml\` before the next push if you want a fresh version tag."
+          } >> "$GITHUB_STEP_SUMMARY"

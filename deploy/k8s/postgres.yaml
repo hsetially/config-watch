@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-credentials
+  namespace: config-watch
+type: Opaque
+stringData:
+  # Replace before applying. Consumed by the Postgres pod and referenced by
+  # deploy/k8s/control-plane.yaml's control-plane-config Secret.
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: CHANGE_ME_POSTGRES_PASSWORD
+  POSTGRES_DB: config_watch
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: config-watch
+  labels:
+    app: postgres
+spec:
+  # Headless Service so the StatefulSet pod gets a stable DNS name:
+  #   postgres-0.postgres.config-watch.svc.cluster.local
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: config-watch
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgres
+              containerPort: 5432
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # Autopilot default. Swap to "premium-rwo" for SSD.
+        storageClassName: standard-rwo
+        resources:
+          requests:
+            storage: 10Gi
