@@ -113,7 +113,6 @@ jobs:
 
       - name: Install system dependencies
         run: ${{ matrix.pkg_install }}
-        shell: ${{ matrix.os == 'windows-latest' && 'pwsh' || 'bash' }}
 
       - name: Set static flags (Windows)
         if: matrix.os == 'windows-latest'
