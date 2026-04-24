@@ -172,9 +172,11 @@ jobs:
     steps:
       - name: Install build dependencies
         run: |
+          # `curl` intentionally omitted — rockylinux ships curl-minimal and
+          # installing full curl conflicts. curl-minimal is enough for rustup.
           dnf install -y epel-release
           dnf install -y gcc gcc-c++ make cmake pkgconf-pkg-config \
-                         openssl-devel curl ca-certificates git tar gzip
+                         openssl-devel ca-certificates git tar gzip
 
       - uses: actions/checkout@v4
 
@@ -209,9 +211,11 @@ jobs:
     steps:
       - name: Install build dependencies
         run: |
+          # `curl` intentionally omitted — rockylinux ships curl-minimal and
+          # installing full curl conflicts. curl-minimal is enough for rustup.
           dnf install -y epel-release
           dnf install -y gcc gcc-c++ make cmake pkgconf-pkg-config \
-                         openssl-devel curl ca-certificates git tar gzip
+                         openssl-devel ca-certificates git tar gzip
 
       - uses: actions/checkout@v4
 

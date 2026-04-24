@@ -8,9 +8,11 @@
 FROM rockylinux:8 AS builder
 WORKDIR /src
 
+# `curl` intentionally omitted — rockylinux:8 ships curl-minimal, and installing the
+# full `curl` package conflicts with it. curl-minimal is sufficient for rustup.
 RUN dnf install -y epel-release \
  && dnf install -y gcc gcc-c++ make cmake pkgconf-pkg-config \
-                   openssl-devel curl ca-certificates git \
+                   openssl-devel ca-certificates git \
  && dnf clean all \
  && rm -rf /var/cache/dnf
 
