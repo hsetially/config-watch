@@ -1,0 +1,28 @@
+agent_id = "00000000-0000-0000-0000-000000000001"
+environment = "development"
+control_plane_base_url = "http://127.0.0.1:8082"
+enrollment_token = "dev-secret-change-me"
+
+[[watch_roots]]
+root_path = "./fixtures/diff-cases"
+recursive = true
+
+[[watch_roots]]
+root_path = "./fixtures/yaml"
+recursive = true
+
+debounce_window_ms = 500
+snapshot_dir = "./tmp/snapshots"
+spool_dir = "./tmp/spool"
+agent_api_bind_addr = "0.0.0.0:9090"
+heartbeat_interval_secs = 30
+query_timeout_secs = 10
+content_preview_max_bytes = 4096
+max_file_size_bytes = 1048576
+max_spool_events = 10000
+max_spool_bytes = 524288000
+
+[diff]
+format = "full_file"          # unified | context | full_file | side_by_side | raw
+context_lines = 3           # only used when format = "context"
+side_by_side_width = 120     # only used when format = "side_by_side"

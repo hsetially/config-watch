@@ -1,0 +1,17 @@
+[package]
+name = "config-auth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+hmac = "0.12"
+sha2.workspace = true
+hex = "0.4"
+constant_time_eq = "0.3"
+serde.workspace = true
+tracing.workspace = true
+config-shared = { path = "../config-shared" }

@@ -1,0 +1,5 @@
+app:
+  name: second-sample
+  feature_flags:
+    realtime: true
+    previews: false

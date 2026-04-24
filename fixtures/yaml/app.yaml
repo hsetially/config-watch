@@ -1,0 +1,3 @@
+service:
+  name: finalv4
+  replicas: 6

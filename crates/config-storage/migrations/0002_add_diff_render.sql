@@ -1,0 +1,1 @@
+ALTER TABLE change_events ADD COLUMN diff_render TEXT;

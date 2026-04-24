@@ -1,0 +1,33 @@
+[Unit]
+Description=Config Watch Control Plane
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+User=configwatch
+Group=configwatch
+WorkingDirectory=/opt/config-watch
+ExecStart=/opt/config-watch/config-control-plane --config /etc/config-watch/control-plane.toml
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+# Environment
+Environment=RUST_LOG=config_control_plane=info
+EnvironmentFile=-/etc/config-watch/control-plane.env
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=config-control-plane
+
+[Install]
+WantedBy=multi-user.target

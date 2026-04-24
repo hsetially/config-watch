@@ -1,0 +1,43 @@
+[package]
+name = "config-control-plane"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+base64 = "0.22"
+camino.workspace = true
+chrono.workspace = true
+clap.workspace = true
+dashmap = "6"
+futures.workspace = true
+config.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+config-auth = { path = "../config-auth" }
+config-shared = { path = "../config-shared" }
+config-storage = { path = "../config-storage" }
+config-transport = { path = "../config-transport" }
+config-workflow = { path = "../config-workflow" }
+config-snapshot = { path = "../config-snapshot" }
+
+[dev-dependencies]
+testcontainers.workspace = true
+testcontainers-modules.workspace = true
+tower.workspace = true
+tokio-tungstenite.workspace = true
+assert-json-diff.workspace = true
+http-body-util.workspace = true
+camino.workspace = true
+tempfile = "3"

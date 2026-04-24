@@ -1,0 +1,1 @@
+ALTER TABLE workflows ADD COLUMN reviewers_json JSONB;

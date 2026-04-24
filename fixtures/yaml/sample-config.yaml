@@ -1,0 +1,43 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Customization
+
+resources:
+  # Istio
+  - ../common/istio/istio-crds/base
+  - ../common/istio/istio-install/overlays/oauth2-proxy
+  - ../common/oauth2-proxy/overlays/m2m-dex-only # for all clusters
+  # - ../common/oauth2-proxy/overlays/m2m-dex-and-kind  # for KIND clusters (allows K8S JWTs for gateway auth)
+  # - ../common/oauth2-proxy/overlays/m2m-dex-and-eks   # for EKS clusters (NOTE: requires you to configure issuer, see overlay)
+  # KNative
+  # Uncomment the following line if `knative-eventing` is required
+  # - ../common/knative/knative-eventing/base
+  - ../common/istio/cluster-local-gateway/base
+  # Kubeflow namespace
+  # Kubeflow Roles
+  - ../common/kubeflow-roles/base
+  # Kubeflow Istio Resources
+  - ../common/istio/kubeflow-istio-resources/base
+  # Kubeflow Pipelines (SeaweedFS as default S3 storage)
+  - ../applications/pipeline/overlays # Pipeline definitions stored in the database
+  # - ../applications/pipeline/upstream/env/cert-manager/platform-agnostic-multi-user-k8s-native # Pipeline Definitions Stored as Kubernetes Resources
+  # Katib
+  - ../applications/katib/upstream/installs/katib-with-kubeflow
+
+  # Notebooks v1
+  - ../applications/notebooks-v1/overlays/istio
+  # Training Operator (v1)
+  # - ../applications/training-operator/upstream/overlays/kubeflow
+  # Trainer (Training Operator v2)
+  - ../applications/trainer/overlays
+  # User namespace
+  - ../common/user-namespace/base
+  # KServe
+  - ../applications/kserve/kserve
+  - ../applications/kserve/models-web-app/overlays/kubeflow
+  # Spark Operator
+  - ../applications/spark/spark-operator/overlays/kubeflow
+
+# Ray is an experimental integration
+# Here is the documentation for Ray: https://docs.ray.io/en/latest/
+# Here is the internal documentation for Ray: - ../experimental/ray/README.md
+# - ../experimental/ray/kuberay-operator/overlays/kubeflow

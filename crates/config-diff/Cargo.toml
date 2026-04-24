@@ -1,0 +1,19 @@
+[package]
+name = "config-diff"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+camino.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile = "3"
+tokio.workspace = true
+tracing.workspace = true
+config-shared = { path = "../config-shared" }
+
+[dev-dependencies]
+toml = "0.8"

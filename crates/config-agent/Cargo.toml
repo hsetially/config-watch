@@ -1,0 +1,41 @@
+[package]
+name = "config-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+base64 = "0.22"
+camino.workspace = true
+chrono.workspace = true
+clap.workspace = true
+config.workspace = true
+futures.workspace = true
+globset.workspace = true
+hostname.workspace = true
+notify.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+walkdir = "2"
+watchexec.workspace = true
+config-shared = { path = "../config-shared" }
+config-auth = { path = "../config-auth" }
+config-diff = { path = "../config-diff" }
+config-snapshot = { path = "../config-snapshot" }
+config-transport = { path = "../config-transport" }
+
+[dev-dependencies]
+tempfile = "3"
+tower.workspace = true
+assert-json-diff.workspace = true
+http-body-util.workspace = true

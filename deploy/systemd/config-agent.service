@@ -1,0 +1,33 @@
+[Unit]
+Description=Config Watch Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=configwatch
+Group=configwatch
+WorkingDirectory=/opt/config-watch
+ExecStart=/opt/config-watch/config-agent --config /etc/config-watch/agent.toml
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/config-watch /var/log/config-watch
+PrivateTmp=true
+
+# Environment
+Environment=RUST_LOG=config_agent=info
+EnvironmentFile=-/etc/config-watch/agent.env
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=config-agent
+
+[Install]
+WantedBy=multi-user.target

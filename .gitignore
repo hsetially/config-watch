@@ -1,0 +1,31 @@
+# Rust
+/target/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Runtime / temp data
+tmp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker volumes
+pgdata/
+
+# WASM dashboard build output
+web/dashboard/dist/
+
+# Docker-based Linux build output
+dist/
+
+data/

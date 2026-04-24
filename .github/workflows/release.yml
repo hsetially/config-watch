@@ -1,0 +1,152 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    name: Build Release (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgit2-dev pkg-config
+
+      - name: Build release binaries
+        run: cargo build --release --bins
+
+      - name: Package binaries
+        run: |
+          mkdir -p release
+          cp target/release/config-control-plane release/
+          cp target/release/config-agent release/
+          cp target/release/config-cli release/
+          tar -czf config-watch-linux-x86_64.tar.gz -C release .
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-watch-linux-x86_64
+          path: config-watch-linux-x86_64.tar.gz
+
+  build-windows:
+    name: Build Release (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install vcpkg dependencies
+        run: |
+          vcpkg install libgit2:x64-windows-static-md openssl:x64-windows-static-md
+          vcpkg integrate install
+        shell: pwsh
+
+      - name: Set environment for static linking
+        run: |
+          echo "PKG_CONFIG_PATH=C:\vcpkg\installed\x64-windows-static-md\lib\pkgconfig" >> $env:GITHUB_ENV
+          echo "RUSTFLAGS=-C target-feature=+crt-static" >> $env:GITHUB_ENV
+        shell: pwsh
+
+      - name: Build release binaries
+        run: cargo build --release --bins
+        env:
+          LIBGIT2_NO_VENDOR: 1
+
+      - name: Package binaries
+        run: |
+          mkdir release
+          copy target\release\config-control-plane.exe release\
+          copy target\release\config-agent.exe release\
+          copy target\release\config-cli.exe release\
+          Compress-Archive -Path release\* -DestinationPath config-watch-windows-x86_64.zip
+        shell: pwsh
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-watch-windows-x86_64
+          path: config-watch-windows-x86_64.zip
+
+  build-dashboard:
+    name: Build Dashboard Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install trunk
+        run: cargo install trunk
+
+      - name: Build dashboard
+        working-directory: web/dashboard
+        run: trunk build --release
+
+      - name: Package dashboard
+        run: |
+          cd web/dashboard/dist
+          zip -r ../../../config-dashboard.zip .
+
+      - name: Upload dashboard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-dashboard-release
+          path: config-dashboard.zip
+
+  create-release:
+    name: Create GitHub Release
+    needs: [build-linux, build-windows, build-dashboard]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: config-watch-linux-x86_64
+          path: artifacts/linux
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: config-watch-windows-x86_64
+          path: artifacts/windows
+
+      - name: Download Dashboard artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: config-dashboard-release
+          path: artifacts/dashboard
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/linux/config-watch-linux-x86_64.tar.gz
+            artifacts/windows/config-watch-windows-x86_64.zip
+            artifacts/dashboard/config-dashboard.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
