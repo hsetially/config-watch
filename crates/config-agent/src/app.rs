@@ -226,7 +226,49 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
                                     }
                                 }
                             }
-                            _ => (None, None),
+                            crate::pipeline::SnapshotDecision::FileCreated { current_data, .. } => {
+                                let curr_str = String::from_utf8_lossy(current_data).to_string();
+                                match pipeline.diff_generate("", &curr_str, &event.canonical_path).await {
+                                    Ok(config_diff::difftastic::DiffOutput::Changed { render, added, removed }) => {
+                                        let file_size_after = current_data.len() as u64;
+                                        let summary = config_diff::summary::build_diff_summary(
+                                            added, removed, 0, file_size_after, &render,
+                                        );
+                                        (Some(summary), Some(render))
+                                    }
+                                    Ok(config_diff::difftastic::DiffOutput::Unchanged) => (None, None),
+                                    Ok(config_diff::difftastic::DiffOutput::Error { message }) => {
+                                        tracing::warn!(path = %event.canonical_path, error = %message, "diff generation failed for created file");
+                                        (None, None)
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!(path = %event.canonical_path, error = %e, "diff generation error for created file");
+                                        (None, None)
+                                    }
+                                }
+                            }
+                            crate::pipeline::SnapshotDecision::FileDeleted { previous_data, .. } => {
+                                let prev_str = String::from_utf8_lossy(previous_data).to_string();
+                                match pipeline.diff_generate(&prev_str, "", &event.canonical_path).await {
+                                    Ok(config_diff::difftastic::DiffOutput::Changed { render, added, removed }) => {
+                                        let file_size_before = previous_data.len() as u64;
+                                        let summary = config_diff::summary::build_diff_summary(
+                                            added, removed, file_size_before, 0, &render,
+                                        );
+                                        (Some(summary), Some(render))
+                                    }
+                                    Ok(config_diff::difftastic::DiffOutput::Unchanged) => (None, None),
+                                    Ok(config_diff::difftastic::DiffOutput::Error { message }) => {
+                                        tracing::warn!(path = %event.canonical_path, error = %message, "diff generation failed for deleted file");
+                                        (None, None)
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!(path = %event.canonical_path, error = %e, "diff generation error for deleted file");
+                                        (None, None)
+                                    }
+                                }
+                            }
+                            crate::pipeline::SnapshotDecision::Unchanged => (None, None),
                         };
 
                         let change_event = pipeline.build_change_event(&event, &decision, diff_summary, diff_render, attribution);

@@ -1,6 +1,6 @@
 [build]
 dist = "dist"
-public_url = "/"
+public_url = "/latest-pci/dashboard"
 
 [watch]
 watch = ["src", "styles"]

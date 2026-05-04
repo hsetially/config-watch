@@ -91,6 +91,15 @@ impl SnapshotStore {
         self.save_state()
     }
 
+    pub fn content_exists(&self, content_hash: &str) -> bool {
+        if content_hash.len() < 2 {
+            return false;
+        }
+        let hash_prefix = &content_hash[..2];
+        let path = self.base_dir.join(hash_prefix).join(content_hash);
+        path.exists()
+    }
+
     pub fn get_last_snapshot_id(&self, path: &Utf8Path) -> Option<SnapshotId> {
         let state = self.state.read().unwrap();
         state
@@ -169,6 +178,20 @@ mod tests {
 
         let read_data = store.read_content(&snap_ref.content_hash).await.unwrap();
         assert_eq!(read_data, data);
+    }
+
+    #[tokio::test]
+    async fn content_exists_detects_file_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+        let store = SnapshotStore::new(&base).unwrap();
+
+        let data = b"key: value";
+        let hash = compute_blake3(data);
+        let _snap_ref = store.write_snapshot(&hash, data).await.unwrap();
+
+        assert!(store.content_exists(&hash));
+        assert!(!store.content_exists("nonexistent_hash_123"));
     }
 
     #[test]

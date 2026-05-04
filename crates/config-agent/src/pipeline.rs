@@ -9,6 +9,24 @@ use crate::attribution::AttributionResolver;
 use crate::config::AgentConfig;
 use crate::debounce::DebouncedEvent;
 
+fn build_glob_set(patterns: &[String]) -> globset::GlobSet {
+    use globset::{Glob, GlobSetBuilder};
+    let mut builder = GlobSetBuilder::new();
+    for pattern in patterns {
+        match Glob::new(pattern) {
+            Ok(g) => {
+                builder.add(g);
+            }
+            Err(e) => {
+                tracing::warn!(pattern = %pattern, error = %e, "baseline: invalid glob, skipping");
+            }
+        }
+    }
+    builder
+        .build()
+        .unwrap_or_else(|_| globset::GlobSet::empty())
+}
+
 /// Scan all watch roots and snapshot existing files that don't yet have a baseline.
 /// This ensures the first real modification has a proper previous version to diff against.
 /// Does not publish any events — only populates the snapshot store.
@@ -17,6 +35,8 @@ pub async fn baseline_scan(
     snapshot_store: &config_snapshot::store::SnapshotStore,
 ) -> Result<BaselineStats> {
     let mut stats = BaselineStats::default();
+    let include_set = build_glob_set(&config.include_globs);
+    let exclude_set = build_glob_set(&config.exclude_globs);
 
     for root in &config.watch_roots {
         if !root.root_path.exists() {
@@ -51,17 +71,22 @@ pub async fn baseline_scan(
             if !config_shared::paths::is_yaml_file(&path) {
                 continue;
             }
-            if config.exclude_globs.iter().any(|pattern| {
-                path.as_str()
-                    .contains(&pattern.replace("**/", "").replace("*", ""))
-            }) {
+            if !include_set.is_empty() && !include_set.is_match(path.as_std_path()) {
+                continue;
+            }
+            if exclude_set.is_match(path.as_std_path()) {
                 continue;
             }
 
-            // Skip files that already have a baseline snapshot
-            if snapshot_store.get_current_hash(&path).is_some() {
-                stats.skipped_existing += 1;
-                continue;
+            // Check if we already have a state entry for this file
+            if let Some(existing_hash) = snapshot_store.get_current_hash(&path) {
+                // Verify the content file actually exists on disk
+                if snapshot_store.content_exists(&existing_hash) {
+                    stats.skipped_existing += 1;
+                    continue;
+                }
+                // Hash in state but content file missing — re-create baseline
+                tracing::info!(path = %path, hash = %existing_hash, "baseline: state entry exists but content file missing, re-creating");
             }
 
             let content = match tokio::fs::read(&path).await {
