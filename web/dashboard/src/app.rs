@@ -41,7 +41,9 @@ pub fn app() -> Html {
         yew::use_state(|| ConnectionStatus::Disconnected);
     let filters: UseStateHandle<FilterState> = yew::use_state(FilterState::default);
     let expanded: UseStateHandle<Option<Uuid>> = yew::use_state(|| None);
-    let server_url: UseStateHandle<String> = yew::use_state(|| "localhost:8082".to_string());
+    let server_url: UseStateHandle<String> = yew::use_state(|| {
+        "fin-iac-rel-devc-csp.csppdev.dfbsaas.com/latest-pci/control-plane".to_string()
+    });
     let view_mode: UseStateHandle<ViewMode> = yew::use_state(|| ViewMode::Stream);
     let hosts: UseStateHandle<Vec<HostInfo>> = yew::use_state(Vec::new);
     let watch_roots: UseStateHandle<Vec<WatchRootInfo>> = yew::use_state(Vec::new);
