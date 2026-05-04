@@ -8,7 +8,7 @@ use crate::models::{
 };
 
 pub fn fetch_hosts(base_url: &str, on_result: Callback<Vec<HostInfo>>) {
-    let url = format!("http://{}/v1/hosts", base_url);
+    let url = format!("https://{}/v1/hosts", base_url);
     let on_result = on_result.clone();
 
     spawn_local(async move {
@@ -41,7 +41,7 @@ pub fn fetch_hosts(base_url: &str, on_result: Callback<Vec<HostInfo>>) {
 }
 
 pub fn fetch_watch_roots(base_url: &str, host_id: &str, on_result: Callback<Vec<WatchRootInfo>>) {
-    let url = format!("http://{}/v1/hosts/{}/roots", base_url, host_id);
+    let url = format!("https://{}/v1/hosts/{}/roots", base_url, host_id);
     let on_result = on_result.clone();
 
     spawn_local(async move {
@@ -77,7 +77,7 @@ pub fn fetch_watch_roots(base_url: &str, host_id: &str, on_result: Callback<Vec<
 }
 
 pub fn fetch_changes(base_url: &str, query: &str, on_result: Callback<ChangesPage>) {
-    let url = format!("http://{}/v1/changes{}", base_url, query);
+    let url = format!("https://{}/v1/changes{}", base_url, query);
     let on_result = on_result.clone();
 
     spawn_local(async move {
@@ -129,7 +129,7 @@ pub fn fetch_event_detail(
     event_id: &str,
     on_result: Callback<Option<ChangeEventRow>>,
 ) {
-    let url = format!("http://{}/v1/changes/{}", base_url, event_id);
+    let url = format!("https://{}/v1/changes/{}", base_url, event_id);
     let on_result = on_result.clone();
 
     spawn_local(async move {
@@ -183,7 +183,7 @@ pub fn create_workflow(
     body: &WorkflowCreateRequest,
     on_result: Callback<Option<WorkflowCreateResponse>>,
 ) {
-    let url = format!("http://{}/v1/workflows", base_url);
+    let url = format!("https://{}/v1/workflows", base_url);
     let on_result = on_result.clone();
     let json_body = serde_json::to_string(body).unwrap_or_default();
 
@@ -218,7 +218,7 @@ pub fn fetch_file_content(
     limit: Option<u64>,
     on_result: Callback<Option<FileContentResponse>>,
 ) {
-    let url = format!("http://{}/v1/file/content", base_url);
+    let url = format!("https://{}/v1/file/content", base_url);
     let on_result = on_result.clone();
     let mut body = serde_json::json!({
         "host_id": host_id,
@@ -266,7 +266,7 @@ pub fn get_workflow(
     workflow_id: &str,
     on_result: Callback<Option<WorkflowStatusResponse>>,
 ) {
-    let url = format!("http://{}/v1/workflows/{}", base_url, workflow_id);
+    let url = format!("https://{}/v1/workflows/{}", base_url, workflow_id);
     let on_result = on_result.clone();
 
     spawn_local(async move {
@@ -292,7 +292,7 @@ pub fn fetch_github_file_content(
     github_token: Option<&str>,
     on_result: Callback<Option<GitHubFileContentResponse>>,
 ) {
-    let url = format!("http://{}/v1/github/file-content", base_url);
+    let url = format!("https://{}/v1/github/file-content", base_url);
     let on_result = on_result.clone();
     let mut body = serde_json::json!({ "url": github_url });
     if let Some(t) = github_token {

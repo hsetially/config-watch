@@ -12,7 +12,7 @@ pub fn connect(
     on_status: Callback<ConnectionStatus>,
 ) {
     let ws_url = format!(
-        "ws://{}/v1/changes/stream{}",
+        "wss://{}/v1/changes/stream{}",
         base_url,
         filters.to_query_string()
     );

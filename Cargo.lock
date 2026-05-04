@@ -516,7 +516,7 @@ dependencies = [
 
 [[package]]
 name = "config-agent"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -553,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "config-auth"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -568,7 +568,7 @@ dependencies = [
 
 [[package]]
 name = "config-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -588,7 +588,7 @@ dependencies = [
 
 [[package]]
 name = "config-control-plane"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -626,7 +626,7 @@ dependencies = [
 
 [[package]]
 name = "config-dashboard"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -647,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "config-diff"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "camino",
@@ -662,7 +662,7 @@ dependencies = [
 
 [[package]]
 name = "config-shared"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "camino",
@@ -678,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "config-snapshot"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "blake3",
@@ -696,7 +696,7 @@ dependencies = [
 
 [[package]]
 name = "config-storage"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "camino",
@@ -715,7 +715,7 @@ dependencies = [
 
 [[package]]
 name = "config-transport"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -731,7 +731,7 @@ dependencies = [
 
 [[package]]
 name = "config-workflow"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "chrono",
