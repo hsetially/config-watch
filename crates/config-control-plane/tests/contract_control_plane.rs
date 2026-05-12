@@ -14,12 +14,12 @@ use common::*;
 
 async fn setup_app() -> AppState {
     let pool = setup_test_db().await;
-    make_app_state(pool, "test-secret")
+    make_app_state(pool, "test-secret").await
 }
 
 // Helper: send request and return (status, json)
 async fn send_req(state: AppState, req: Request<Body>) -> (StatusCode, Value) {
-    let auth = make_test_auth();
+    let auth = make_test_auth().await;
     let app = build_router(state, auth);
     let response = app.oneshot(req).await.unwrap();
     let status = response.status();

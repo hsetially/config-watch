@@ -21,7 +21,7 @@ async fn e2e_websocket_broadcast_after_ingest() {
     // violations on change_events.host_id.
     let pool = setup_test_db().await;
 
-    let state = make_app_state_with_broadcast_capacity(pool, "ws-secret", 256);
+    let state = make_app_state_with_broadcast_capacity(pool, "ws-secret", 256).await;
     let mut rx = state.broadcast_tx.subscribe();
 
     // Register host
@@ -59,7 +59,7 @@ async fn e2e_websocket_filter_by_environment() {
     // violations on change_events.host_id.
     let pool = setup_test_db().await;
 
-    let state = make_app_state_with_broadcast_capacity(pool, "ws-secret", 256);
+    let state = make_app_state_with_broadcast_capacity(pool, "ws-secret", 256).await;
 
     let host_prod = Uuid::new_v4();
     let host_dev = Uuid::new_v4();
@@ -139,7 +139,7 @@ async fn e2e_websocket_filter_by_severity() {
     // violations on change_events.host_id.
     let pool = setup_test_db().await;
 
-    let state = make_app_state_with_broadcast_capacity(pool, "ws-secret", 256);
+    let state = make_app_state_with_broadcast_capacity(pool, "ws-secret", 256).await;
 
     let host_id = Uuid::new_v4();
     db_helpers::seed_host(state.db.pool(), host_id, "sev-host", "default")

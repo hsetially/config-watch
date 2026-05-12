@@ -13,7 +13,7 @@ mod common;
 use common::*;
 
 async fn send_req(state: AppState, req: Request<Body>) -> (StatusCode, Value) {
-    let auth = make_test_auth();
+    let auth = make_test_auth().await;
     let app = build_router(state, auth);
     let response = app.oneshot(req).await.unwrap();
     let status = response.status();
@@ -28,7 +28,7 @@ async fn setup_e2e() -> AppState {
     // ids, so we rely on UUID scoping for isolation rather than truncating shared
     // tables (which races with other tests' seeded rows).
     let pool = setup_test_db().await;
-    make_app_state(pool, "e2e-secret")
+    make_app_state(pool, "e2e-secret").await
 }
 
 #[tokio::test]

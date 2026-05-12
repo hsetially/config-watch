@@ -21,38 +21,41 @@ pub async fn setup_test_db() -> PgPool {
     db.pool().clone()
 }
 
-pub fn make_test_auth() -> AuthState {
+pub async fn make_test_auth() -> AuthState {
     let config =
         better_auth::AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
             .base_url("http://localhost:3000");
     let db = better_auth::adapters::SqlxAdapter::from_pool(
         sqlx::PgPool::connect_lazy("postgres://localhost/nonexistent").unwrap(),
     );
-    Arc::new(tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(async {
-            better_auth::AuthBuilder::new(config)
-                .database(db)
-                .plugin(better_auth::plugins::EmailPasswordPlugin::new().enable_signup(true))
-                .build()
-                .await
-                .expect("failed to build test auth")
-        })
-    }))
+    Arc::new(
+        better_auth::AuthBuilder::new(config)
+            .database(db)
+            .plugin(better_auth::plugins::EmailPasswordPlugin::new().enable_signup(true))
+            .build()
+            .await
+            .expect("failed to build test auth"),
+    )
 }
 
 #[allow(dead_code)]
-pub fn make_app_state(pool: sqlx::PgPool, secret: &str) -> AppState {
+pub async fn make_app_state(pool: sqlx::PgPool, secret: &str) -> AppState {
     let db = Database::from_pool(pool);
     let tmp = tempfile::tempdir().expect("create temp dir");
     let snapshot_store = config_snapshot::store::SnapshotStore::new(camino::Utf8Path::new(
         tmp.path().join("snapshots").to_str().unwrap(),
     ))
     .expect("create snapshot store");
-    AppState::new(db, secret.to_string(), snapshot_store, make_test_auth())
+    AppState::new(
+        db,
+        secret.to_string(),
+        snapshot_store,
+        make_test_auth().await,
+    )
 }
 
 #[allow(dead_code)]
-pub fn make_app_state_with_broadcast_capacity(
+pub async fn make_app_state_with_broadcast_capacity(
     pool: sqlx::PgPool,
     secret: &str,
     capacity: usize,
@@ -68,7 +71,7 @@ pub fn make_app_state_with_broadcast_capacity(
         secret.to_string(),
         capacity,
         snapshot_store,
-        make_test_auth(),
+        make_test_auth().await,
     )
 }
 

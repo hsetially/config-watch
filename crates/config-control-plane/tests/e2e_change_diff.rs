@@ -22,7 +22,7 @@ mod common;
 use common::*;
 
 async fn send(state: AppState, req: Request<Body>) -> (StatusCode, Value) {
-    let auth = make_test_auth();
+    let auth = make_test_auth().await;
     let app = build_router(state, auth);
     let response = app.oneshot(req).await.unwrap();
     let status = response.status();
@@ -41,7 +41,7 @@ fn diff_request(event_id: Uuid) -> Request<Body> {
 
 async fn setup() -> AppState {
     let pool = setup_test_db().await;
-    make_app_state(pool, "diff-e2e-secret")
+    make_app_state(pool, "diff-e2e-secret").await
 }
 
 #[tokio::test]
