@@ -34,8 +34,17 @@ pub fn is_path_allowed(path: &str, watch_roots: &[&str]) -> bool {
     let canonical = match std::fs::canonicalize(path) {
         Ok(c) => c,
         Err(_) => {
-            // Broken symlink or inaccessible — reject.
-            return false;
+            // File doesn't exist yet — fall back to lexical check against
+            // canonicalized (or lexical) roots. This is less safe but
+            // allows querying paths for files that haven't been created.
+            let query_path = Path::new(path);
+            return watch_roots.iter().any(|root| {
+                let canonical_root = match std::fs::canonicalize(root) {
+                    Ok(r) => r,
+                    Err(_) => Path::new(root).to_path_buf(),
+                };
+                query_path.starts_with(&canonical_root)
+            });
         }
     };
     watch_roots.iter().any(|root| {
