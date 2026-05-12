@@ -19,4 +19,6 @@ walkdir = "2"
 config-shared = { path = "../config-shared" }
 
 [dev-dependencies]
+filetime = "0.2"
 tempfile = "3"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

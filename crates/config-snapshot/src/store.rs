@@ -107,6 +107,15 @@ impl SnapshotStore {
             .map(|e| SnapshotId::from(e.snapshot_id))
     }
 
+    /// Returns all tracked file paths and their current content hashes.
+    pub fn list_tracked_files(&self) -> Vec<(Utf8PathBuf, String)> {
+        let state = self.state.read().unwrap();
+        state
+            .iter()
+            .map(|(path, entry)| (Utf8PathBuf::from(path), entry.content_hash.clone()))
+            .collect()
+    }
+
     fn load_state(base_dir: &Utf8Path) -> anyhow::Result<CurrentStateMap> {
         let state_path = base_dir.join("current_state.json");
         if !state_path.exists() {

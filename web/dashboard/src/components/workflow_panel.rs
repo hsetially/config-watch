@@ -17,6 +17,7 @@ pub struct WorkflowPanelProps {
     pub events: Rc<Vec<RealtimeMessage>>,
     pub selected_events: Rc<HashSet<Uuid>>,
     pub server_url: String,
+    pub csrf_token: Option<String>,
     pub on_close: Callback<()>,
     pub on_pr_created: Callback<()>,
 }
@@ -103,6 +104,7 @@ pub fn workflow_panel(props: &WorkflowPanelProps) -> Html {
     {
         let panel_state = panel_state.clone();
         let server_url = props.server_url.clone();
+        let _csrf_token = props.csrf_token.clone();
         let interval: Rc<RefCell<Option<gloo::timers::callback::Interval>>> =
             yew::use_mut_ref(|| None);
 
@@ -133,12 +135,12 @@ pub fn workflow_panel(props: &WorkflowPanelProps) -> Html {
                         }
                     });
 
-                api::get_workflow(&server, &id_str, on_result.clone());
+                api::get_workflow(&server, &id_str, on_result.clone(), None);
 
                 let id_str2 = id_str.clone();
                 let server2 = server.clone();
                 let interval_handle = gloo::timers::callback::Interval::new(2000, move || {
-                    api::get_workflow(&server2, &id_str2, on_result.clone());
+                    api::get_workflow(&server2, &id_str2, on_result.clone(), None);
                 });
                 *interval.borrow_mut() = Some(interval_handle);
             }
@@ -173,6 +175,7 @@ pub fn workflow_panel(props: &WorkflowPanelProps) -> Html {
         let server_url = props.server_url.clone();
         let selected_events = selected.clone();
         let repo_filenames = repo_filenames.clone();
+        let csrf_token = props.csrf_token.clone();
         Callback::from(move |_: ()| {
             let filenames = (*repo_filenames).clone();
             let file_changes: Vec<FileChangeRequest> = selected_events
@@ -251,6 +254,7 @@ pub fn workflow_panel(props: &WorkflowPanelProps) -> Html {
             api::create_workflow(
                 &server_url,
                 &body,
+                csrf_token.clone(),
                 Callback::from(move |resp: Option<crate::models::WorkflowCreateResponse>| {
                     if let Some(r) = resp {
                         ps.set(PanelState::Polling {
@@ -262,6 +266,7 @@ pub fn workflow_panel(props: &WorkflowPanelProps) -> Html {
                         });
                     }
                 }),
+                None,
             );
 
             panel_state.set(PanelState::Submitting);

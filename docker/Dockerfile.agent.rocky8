@@ -1,0 +1,84 @@
+# syntax=docker/dockerfile:1.6
+#
+# Rocky Linux 8 build + runtime for config-agent.
+# Produces a binary that dynamically links glibc 2.28 and libssl.so.1.1,
+# so it runs on Rocky 8.x / RHEL 8.x / Alma 8.x hosts without rebuilding.
+# Built and pushed by .github/workflows/docker-publish.yml (matrix: rocky8).
+#
+# Runtime configuration is via TOML file (/etc/config-watch/agent.toml)
+# and/or CONFIG_WATCH_* environment variables. Key env vars:
+#
+#   Required:
+#     CONFIG_WATCH_AGENT_ID                Unique UUID for this agent
+#     CONFIG_WATCH_ENVIRONMENT              Environment label (e.g. production, staging)
+#     CONFIG_WATCH_CONTROL_PLANE_BASE_URL  Control plane URL (e.g. https://cp.example.com)
+#     CONFIG_WATCH_WATCH_ROOTS__0__ROOT_PATH  First watched directory path
+#
+#   Authentication:
+#     CONFIG_WATCH_ENROLLMENT_TOKEN   Token for initial registration with control plane
+#     CONFIG_WATCH_AGENT_API_SECRET   HMAC secret for agent query API (empty = no auth)
+#
+#   Network:
+#     CONFIG_WATCH_AGENT_API_BIND_ADDR           Listen address for query API (default: 127.0.0.1:9090)
+#     CONFIG_WATCH_TUNNEL_ENABLED                Enable WebSocket tunnel to control plane (default: true)
+#     CONFIG_WATCH_TUNNEL_RECONNECT_BASE_SECS    Initial reconnect backoff in seconds (default: 1)
+#     CONFIG_WATCH_TUNNEL_RECONNECT_MAX_SECS      Maximum reconnect backoff in seconds (default: 30)
+#     CONFIG_WATCH_TLS_REQUIRED                  Require HTTPS for control plane URL (default: true)
+#
+#   Watch behavior:
+#     CONFIG_WATCH_INCLUDE_GLOBS            File patterns to watch (default: ["**/*.yaml","**/*.yml"])
+#     CONFIG_WATCH_EXCLUDE_GLOBS            File patterns to exclude (default: ["**/.*","**/*.sw?","**/~*"])
+#     CONFIG_WATCH_DEBOUNCE_WINDOW_MS       Debounce window in ms (default: 500)
+#     CONFIG_WATCH_MAX_FILE_SIZE_BYTES       Max file size to process (default: 1048576)
+#     CONFIG_WATCH_CONTENT_PREVIEW_MAX_BYTES Max preview bytes (default: 4096)
+#     CONFIG_WATCH_REDACTION_PATTERNS        Regex patterns for redacting secrets
+#
+#   Storage:
+#     CONFIG_WATCH_SNAPSHOT_DIR   Snapshot storage directory (default: /var/lib/config-watch/snapshots)
+#     CONFIG_WATCH_SPOOL_DIR     Spool directory (default: /var/lib/config-watch/spool)
+#     CONFIG_WATCH_MAX_SPOOL_EVENTS  Max events in spool (default: 10000)
+#     CONFIG_WATCH_MAX_SPOOL_BYTES   Max spool size in bytes (default: 524288000)
+#
+#   Diff (local):
+#     CONFIG_WATCH_DIFF__FORMAT             Diff format override
+#     CONFIG_WATCH_DIFF__CONTEXT_LINES      Context lines (default: 3)
+#     CONFIG_WATCH_DIFF__SIDE_BY_SIDE_WIDTH Column width (default: 120)
+
+FROM rockylinux:8 AS builder
+WORKDIR /src
+
+RUN dnf install -y epel-release \
+ && dnf install -y gcc gcc-c++ make cmake pkgconf-pkg-config \
+                   openssl-devel ca-certificates git \
+ && dnf clean all \
+ && rm -rf /var/cache/dnf
+
+# Rust via rustup — the distro's packaged rustc is older than our MSRV (1.78).
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+COPY . .
+
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/src/target \
+    cargo build --release -p config-agent \
+ && mkdir -p /out \
+ && cp target/release/config-agent /out/config-agent
+
+FROM rockylinux:8
+
+RUN dnf install -y openssl-libs ca-certificates \
+ && dnf clean all \
+ && rm -rf /var/cache/dnf \
+ && groupadd --system --gid 10001 app \
+ && useradd  --system --uid 10001 --gid 10001 --home-dir /var/lib/config-watch --no-create-home app \
+ && mkdir -p /var/lib/config-watch/snapshots /var/lib/config-watch/spool /etc/config-watch \
+ && chown -R app:app /var/lib/config-watch /etc/config-watch
+
+COPY --from=builder /out/config-agent /usr/local/bin/config-agent
+
+USER 10001:10001
+EXPOSE 9090
+
+ENTRYPOINT ["/usr/local/bin/config-agent"]
+CMD ["--config", "/etc/config-watch/agent.toml"]

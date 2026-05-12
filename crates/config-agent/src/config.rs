@@ -42,12 +42,29 @@ pub struct AgentConfig {
     pub max_file_size_bytes: u64,
     #[serde(default = "default_agent_api_bind_addr")]
     pub agent_api_bind_addr: String,
+    /// HMAC secret for authenticating queries to the agent API.
+    /// If empty (default), auth is skipped — only safe when bound to 127.0.0.1.
+    /// Set CONFIG_WATCH_AGENT_API_SECRET to enable HMAC auth on the query API.
+    #[serde(default)]
+    pub agent_api_secret: String,
     #[serde(default = "default_true")]
     pub tunnel_enabled: bool,
     #[serde(default = "default_tunnel_reconnect_base_secs")]
     pub tunnel_reconnect_base_secs: u64,
     #[serde(default = "default_tunnel_reconnect_max_secs")]
     pub tunnel_reconnect_max_secs: u64,
+    /// When true (the production default), the control-plane HTTP client
+    /// enforces https:// + TLS 1.2 and `validate()` rejects an http:// base URL.
+    /// Set to false in local dev only.
+    #[serde(default = "default_true")]
+    pub tls_required: bool,
+    /// Watcher backend: "auto" (detect NFS → poll), "poll" (force PollWatcher),
+    /// or "inotify" (force RecommendedWatcher). Default: "auto".
+    #[serde(default = "default_watch_mode")]
+    pub watch_mode: String,
+    /// Poll interval in seconds when using PollWatcher. Default: 2.
+    #[serde(default = "default_poll_interval_secs")]
+    pub poll_interval_secs: u64,
     #[serde(default)]
     pub diff: DiffConfig,
 }
@@ -80,9 +97,25 @@ impl AgentConfig {
         Ok(HostId::from(uuid))
     }
 
-    fn validate(&self) -> anyhow::Result<()> {
+    pub fn validate(&self) -> anyhow::Result<()> {
         if self.watch_roots.is_empty() {
             anyhow::bail!("watch_roots must not be empty");
+        }
+        if !matches!(self.watch_mode.as_str(), "auto" | "poll" | "inotify") {
+            anyhow::bail!(
+                "watch_mode must be one of: auto, poll, inotify (got {})",
+                self.watch_mode
+            );
+        }
+        if self.poll_interval_secs == 0 {
+            anyhow::bail!("poll_interval_secs must be > 0");
+        }
+        if self.tls_required && !self.control_plane_base_url.starts_with("https://") {
+            anyhow::bail!(
+                "tls_required is true but control_plane_base_url is not https:// \
+                 (got {}). Use https:// in production, or set tls_required = false for local dev.",
+                self.control_plane_base_url
+            );
         }
         for root in &self.watch_roots {
             if !root.root_path.exists() {
@@ -142,7 +175,7 @@ fn default_max_file_size_bytes() -> u64 {
 }
 
 fn default_agent_api_bind_addr() -> String {
-    "0.0.0.0:9090".into()
+    "127.0.0.1:9090".into()
 }
 
 fn default_tunnel_reconnect_base_secs() -> u64 {
@@ -155,4 +188,12 @@ fn default_tunnel_reconnect_max_secs() -> u64 {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_watch_mode() -> String {
+    "auto".into()
+}
+
+fn default_poll_interval_secs() -> u64 {
+    2
 }

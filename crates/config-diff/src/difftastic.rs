@@ -128,49 +128,69 @@ impl DiffEngine {
         current: &str,
         file_path: &Utf8Path,
     ) -> Result<DiffOutput> {
+        self.compute_diff_with_format(previous, current, file_path, self.config.format)
+            .await
+    }
+
+    /// Like [`compute_diff`] but uses an explicit format instead of the engine's
+    /// configured default. This lets the control plane honour per-request
+    /// `?format=` overrides without rebuilding the engine.
+    pub async fn compute_diff_with_format(
+        &self,
+        previous: &str,
+        current: &str,
+        file_path: &Utf8Path,
+        format: DiffFormat,
+    ) -> Result<DiffOutput> {
         if !self.difft_available {
             return Ok(self.line_diff(previous, current));
         }
 
-        match self.config.format {
-            DiffFormat::Raw => self.run_difftastic_raw(previous, current, file_path).await,
-            _ => {
-                // All other formats use JSON mode + custom rendering
-                let json_output = self
-                    .run_difftastic_json(previous, current, file_path)
-                    .await?;
+        if format == DiffFormat::Raw {
+            return self.run_difftastic_raw(previous, current, file_path).await;
+        }
 
-                let prev_lines: Vec<&str> = previous.lines().collect();
-                let curr_lines: Vec<&str> = current.lines().collect();
+        let json_output = self
+            .run_difftastic_json(previous, current, file_path)
+            .await?;
 
-                let parsed: Option<DifftasticJsonOutput> = serde_json::from_str(&json_output).ok();
+        let prev_lines: Vec<&str> = previous.lines().collect();
+        let curr_lines: Vec<&str> = current.lines().collect();
 
-                match parsed {
-                    Some(output) => match self.config.format {
-                        DiffFormat::Unified => {
-                            render_unified(&output, &prev_lines, &curr_lines, file_path)
-                        }
-                        DiffFormat::Context => render_context(
-                            &output,
-                            &prev_lines,
-                            &curr_lines,
-                            file_path,
-                            self.config.context_lines,
-                        ),
-                        DiffFormat::FullFile => {
-                            render_full_file(&output, &prev_lines, &curr_lines, file_path)
-                        }
-                        DiffFormat::SideBySide => render_side_by_side(
-                            &output,
-                            &prev_lines,
-                            &curr_lines,
-                            file_path,
-                            self.config.side_by_side_width,
-                        ),
-                        DiffFormat::Raw => unreachable!(),
-                    },
-                    None => Ok(self.line_diff(previous, current)),
+        let parsed: Option<DifftasticJsonOutput> = serde_json::from_str(&json_output).ok();
+
+        match parsed {
+            Some(output) => match format {
+                DiffFormat::Unified => {
+                    render_unified(&output, &prev_lines, &curr_lines, file_path)
                 }
+                DiffFormat::Context => render_context(
+                    &output,
+                    &prev_lines,
+                    &curr_lines,
+                    file_path,
+                    self.config.context_lines,
+                ),
+                DiffFormat::FullFile => {
+                    render_full_file(&output, &prev_lines, &curr_lines, file_path)
+                }
+                DiffFormat::SideBySide => render_side_by_side(
+                    &output,
+                    &prev_lines,
+                    &curr_lines,
+                    file_path,
+                    self.config.side_by_side_width,
+                ),
+                DiffFormat::Raw => unreachable!(),
+            },
+            None => {
+                tracing::warn!(
+                    file = %file_path,
+                    requested_format = ?format,
+                    json_len = json_output.len(),
+                    "difftastic returned unparseable JSON; falling back to unified line_diff"
+                );
+                Ok(self.line_diff(previous, current))
             }
         }
     }
@@ -918,7 +938,7 @@ fn truncate_to_width(s: &str, width: usize) -> String {
 /// 1. Next to the current executable (cargo-built via `cargo install difftastic`)
 /// 2. DIFFTASTIC_PATH env var (explicit override)
 /// 3. Bare "difft" on PATH (system-installed or cargo-installed)
-fn find_difft_binary() -> (PathBuf, bool) {
+pub fn find_difft_binary() -> (PathBuf, bool) {
     // 1. Next to the current executable
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {

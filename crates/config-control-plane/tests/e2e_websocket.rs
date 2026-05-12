@@ -1,6 +1,10 @@
+use std::collections::VecDeque;
+use std::sync::Arc;
+
 use uuid::Uuid;
 
 use config_control_plane::ingest::IngestService;
+use config_control_plane::services::LocalEventDedup;
 
 mod common;
 
@@ -27,10 +31,12 @@ async fn e2e_websocket_broadcast_after_ingest() {
         .unwrap();
 
     // Ingest a change event directly via IngestService
+    let local_event_dedup: LocalEventDedup = Arc::new(std::sync::Mutex::new(VecDeque::new()));
     let body = make_change_event_json(&host_id, "/etc/ws-app/config.yaml", "modified", "ws-key-1");
     let _outcome = IngestService::ingest_change(
         state.db.pool(),
         &state.broadcast_tx,
+        &local_event_dedup,
         &state.snapshot_store,
         body,
     )
@@ -74,6 +80,7 @@ async fn e2e_websocket_filter_by_environment() {
     let mut rx = state.broadcast_tx.subscribe();
 
     // Ingest event for production host
+    let local_event_dedup: LocalEventDedup = Arc::new(std::sync::Mutex::new(VecDeque::new()));
     let body_prod = make_change_event_json(
         &host_prod,
         "/etc/prod/config.yaml",
@@ -83,6 +90,7 @@ async fn e2e_websocket_filter_by_environment() {
     IngestService::ingest_change(
         state.db.pool(),
         &state.broadcast_tx,
+        &local_event_dedup,
         &state.snapshot_store,
         body_prod,
     )
@@ -95,6 +103,7 @@ async fn e2e_websocket_filter_by_environment() {
     IngestService::ingest_change(
         state.db.pool(),
         &state.broadcast_tx,
+        &local_event_dedup,
         &state.snapshot_store,
         body_dev,
     )
@@ -147,6 +156,7 @@ async fn e2e_websocket_filter_by_severity() {
     let mut rx = state.broadcast_tx.subscribe();
 
     // Ingest warning event (severity: warning via event body)
+    let local_event_dedup: LocalEventDedup = Arc::new(std::sync::Mutex::new(VecDeque::new()));
     let body_warning = make_change_event_json_with_severity(
         &host_id,
         "/etc/warn.yaml",
@@ -157,6 +167,7 @@ async fn e2e_websocket_filter_by_severity() {
     IngestService::ingest_change(
         state.db.pool(),
         &state.broadcast_tx,
+        &local_event_dedup,
         &state.snapshot_store,
         body_warning,
     )

@@ -105,6 +105,18 @@ pub fn filter_bar(props: &FilterBarProps) -> Html {
         })
     };
 
+    let on_diff_format_change = {
+        let on_change = props.on_change.clone();
+        let filters = props.filters.clone();
+        Callback::from(move |e: Event| {
+            let select: HtmlSelectElement = e.target_unchecked_into();
+            let mut new_filters = filters.clone();
+            let val = select.value();
+            new_filters.diff_format = if val.is_empty() { None } else { Some(val) };
+            on_change.emit(new_filters);
+        })
+    };
+
     let on_page_size_change = {
         let on_change = props.on_page_size_change.clone();
         Callback::from(move |e: Event| {
@@ -281,6 +293,22 @@ pub fn filter_bar(props: &FilterBarProps) -> Html {
                         <option value="critical">{"Critical"}</option>
                     </select>
                 </div>
+                if !compare_active {
+                    <div class="filter-group">
+                        <label for="filter-format">{"Diff Format"}</label>
+                        <select
+                            id="filter-format"
+                            value={props.filters.diff_format.clone().unwrap_or_default()}
+                            onchange={on_diff_format_change}
+                        >
+                            <option value="context">{"Context"}</option>
+                            <option value="unified">{"Unified"}</option>
+                            <option value="full_file">{"Full File"}</option>
+                            <option value="side_by_side">{"Side by Side"}</option>
+                            <option value="raw">{"Raw"}</option>
+                        </select>
+                    </div>
+                }
                 if props.view_mode == ViewMode::History {
                     <div class="filter-group">
                         <label for="filter-since">{"From"}</label>

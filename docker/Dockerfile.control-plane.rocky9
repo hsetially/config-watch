@@ -4,6 +4,9 @@
 # Produces a binary that dynamically links glibc 2.34 and libssl.so.3,
 # so it runs on Rocky 9.x / RHEL 9.x / Alma 9.x hosts without rebuilding.
 # Built and pushed by .github/workflows/docker-publish.yml (matrix: rocky9).
+#
+# Runtime configuration via TOML file and/or CONFIG_WATCH_* env vars.
+# See Dockerfile.control-plane for the full env var reference.
 
 FROM rockylinux:9 AS builder
 WORKDIR /src

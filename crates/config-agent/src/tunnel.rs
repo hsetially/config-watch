@@ -79,6 +79,7 @@ impl AgentTunnel {
                                     path: String::new(),
                                     offset: None,
                                     limit: None,
+                                    content_hash: None,
                                 });
 
                             let response = self.handle_query(&payload).await;
@@ -116,6 +117,16 @@ impl AgentTunnel {
         match request.kind {
             QueryKind::Stat => map_query_result(self.query_handler.stat(&request.path).await),
             QueryKind::Preview => map_query_result(self.query_handler.preview(&request.path)),
+            QueryKind::PreviewRevision => {
+                let revision = config_transport::agent_query::PreviewRevision::Snapshot {
+                    content_hash: request.content_hash.clone().unwrap_or_default(),
+                };
+                map_query_result(
+                    self.query_handler
+                        .preview_revision(&request.path, &revision)
+                        .await,
+                )
+            }
             QueryKind::Content => map_query_result(self.query_handler.content(
                 &request.path,
                 request.offset,
@@ -133,6 +144,15 @@ fn map_query_result<T: serde::Serialize>(result: anyhow::Result<T>) -> QueryResp
             error: None,
         },
         Err(e) => {
+            if e.downcast_ref::<config_transport::agent_query::SnapshotGone>()
+                .is_some()
+            {
+                return QueryResponsePayload {
+                    status: "gone".into(),
+                    data: None,
+                    error: Some(e.to_string()),
+                };
+            }
             let msg = e.to_string();
             let status = if msg.contains("denied") {
                 "denied"

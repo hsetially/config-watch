@@ -131,7 +131,7 @@ pub async fn handle_agent_tunnel(socket: WebSocket, state: AppState, host_id: Uu
                 msg = out_rx.recv() => {
                     match msg {
                         Some(text) => {
-                            if ws_sink.send(Message::Text(text)).await.is_err() {
+                            if ws_sink.send(Message::Text(text.into())).await.is_err() {
                                 break;
                             }
                         }
@@ -141,13 +141,13 @@ pub async fn handle_agent_tunnel(socket: WebSocket, state: AppState, host_id: Uu
                 _ = ping_interval.tick() => {
                     let ping = TunnelMessage::ping();
                     let json = serde_json::to_string(&ping).unwrap_or_default();
-                    if ws_sink.send(Message::Text(json)).await.is_err() {
+                    if ws_sink.send(Message::Text(json.into())).await.is_err() {
                         break;
                     }
                 }
             }
         }
-        let _ = ws_sink.close().await;
+        let _ = ws_sink.send(Message::Close(None)).await;
     });
 
     let mut recv_task = tokio::spawn(async move {

@@ -15,6 +15,8 @@ pub struct ChangeEventFilters {
     pub severity: Option<String>,
     pub since: Option<DateTime<Utc>>,
     pub until: Option<DateTime<Utc>>,
+    /// Event kinds to exclude (e.g., "initial_snapshot").
+    pub event_kind_exclude: Vec<String>,
 }
 
 impl ChangeEventsRepo {
@@ -111,6 +113,14 @@ impl ChangeEventsRepo {
             param_idx += 1;
             query.push_str(&format!(" AND event_time <= ${}", param_idx));
         }
+        if !filters.event_kind_exclude.is_empty() {
+            param_idx += 1;
+            let placeholders: Vec<String> = (0..filters.event_kind_exclude.len())
+                .map(|i| format!("${}", param_idx + i as u32))
+                .collect();
+            query.push_str(&format!(" AND event_kind NOT IN ({})", placeholders.join(", ")));
+            param_idx += filters.event_kind_exclude.len() as u32 - 1;
+        }
 
         param_idx += 1;
         let limit_idx = param_idx;
@@ -143,6 +153,9 @@ impl ChangeEventsRepo {
         }
         if let Some(v) = filters.until {
             q = q.bind(v);
+        }
+        for kind in &filters.event_kind_exclude {
+            q = q.bind(kind);
         }
         q = q.bind(limit).bind(offset);
 
@@ -185,6 +198,13 @@ impl ChangeEventsRepo {
             param_idx += 1;
             query.push_str(&format!(" AND event_time <= ${}", param_idx));
         }
+        if !filters.event_kind_exclude.is_empty() {
+            let start_idx = param_idx + 1;
+            let placeholders: Vec<String> = (0..filters.event_kind_exclude.len())
+                .map(|i| format!("${}", start_idx + i as u32))
+                .collect();
+            query.push_str(&format!(" AND event_kind NOT IN ({})", placeholders.join(", ")));
+        }
 
         let mut q = sqlx::query_as::<_, (i64,)>(&query);
 
@@ -208,6 +228,9 @@ impl ChangeEventsRepo {
         }
         if let Some(v) = filters.until {
             q = q.bind(v);
+        }
+        for kind in &filters.event_kind_exclude {
+            q = q.bind(kind);
         }
 
         let row = q.fetch_one(pool).await?;

@@ -6,6 +6,8 @@ use uuid::Uuid;
 use config_storage::models::ChangeEventRow;
 use config_transport::websocket::RealtimeMessage;
 
+use crate::services::LocalEventDedup;
+
 pub enum IngestOutcome {
     Accepted { event_id: Uuid },
     Duplicate { event_id: Uuid },
@@ -18,6 +20,7 @@ impl IngestService {
     pub async fn ingest_change(
         pool: &PgPool,
         broadcast_tx: &broadcast::Sender<RealtimeMessage>,
+        local_event_dedup: &LocalEventDedup,
         snapshot_store: &config_snapshot::store::SnapshotStore,
         body: serde_json::Value,
     ) -> Result<IngestOutcome> {
@@ -223,6 +226,15 @@ impl IngestService {
         };
 
         let _ = broadcast_tx.send(msg);
+
+        // Mark this event as locally-sent so the PgListener can skip it
+        // (avoiding double-broadcast when the DB trigger also fires NOTIFY).
+        if let Ok(mut dedup) = local_event_dedup.lock() {
+            if dedup.len() >= 64 {
+                dedup.pop_front();
+            }
+            dedup.push_back(row.event_id);
+        }
 
         let _ = config_storage::repositories::hosts::HostsRepo::heartbeat(pool, host_id).await;
 

@@ -5,16 +5,38 @@ metadata:
   namespace: config-watch
 type: Opaque
 stringData:
-  # Replace CHANGE_ME values before applying. Both the DB password here and in
-  # postgres-credentials Secret must match.
+  # Secrets are referenced from environment variables set by
+  # separate generated secrets. The TOML below uses env-var interpolation
+  # via the config crate's CONFIG_WATCH_ prefix.
   control-plane.toml: |
     bind_addr = "0.0.0.0:8082"
-    database_url = "postgres://postgres:CHANGE_ME_POSTGRES_PASSWORD@postgres.config-watch.svc.cluster.local:5432/config_watch"
-    control_plane_secret = "CHANGE_ME_CONTROL_PLANE_SECRET"
+    database_url = "postgres://postgres:${POSTGRES_PASSWORD}@postgres.config-watch.svc.cluster.local:5432/config_watch?sslmode=require"
+    control_plane_secret = "${CONTROL_PLANE_SECRET}"
     query_timeout_secs = 10
     snapshot_data_dir = "/var/lib/config-watch/snapshots"
     repos_dir = "/var/lib/config-watch/repos"
-    github_token = ""
+
+    [auth]
+    secret = "${AUTH_SECRET}"
+    base_url = "${AUTH_BASE_URL}"
+    trusted_origins = ["${DASHBOARD_ORIGIN}"]
+    require_approval = true
+    tls_required = false
+    # admin_api_secret = "${ADMIN_API_SECRET}"  # Uncomment and set for admin API access
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: control-plane-secrets
+  namespace: config-watch
+type: Opaque
+# Generate these secrets before deploying. Do NOT commit real values.
+# Use: kubectl create secret generic control-plane-secrets \
+#   --from-literal=CONTROL_PLANE_SECRET=$(openssl rand -base64 32) \
+#   --from-literal=AUTH_SECRET=$(openssl rand -base64 32) \
+#   --from-literal=POSTGRES_PASSWORD=$(openssl rand -base64 24) \
+#   --from-literal=GITHUB_TOKEN=<optional-github-token> \
+#   --namespace=config-watch
 ---
 apiVersion: cloud.google.com/v1
 kind: BackendConfig
@@ -76,18 +98,65 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: control-plane
+      automountServiceAccountToken: false
       containers:
         - name: control-plane
           # Replace OWNER/TAG before applying. Prefer the immutable
           # <version>-sha-<short> tag over :latest for reproducible rollouts.
           image: ghcr.io/OWNER/config-watch-control-plane:TAG
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - containerPort: 8082
               name: http
           env:
             - name: RUST_LOG
               value: info
+            # C2 fix: inject secrets from the generated Secret, not committed literals.
+            - name: CONTROL_PLANE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: control-plane-secrets
+                  key: CONTROL_PLANE_SECRET
+            - name: AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: control-plane-secrets
+                  key: AUTH_SECRET
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: control-plane-secrets
+                  key: POSTGRES_PASSWORD
+            - name: AUTH_BASE_URL
+              value: "https://$(CONTROL_PLANE_SERVICE_HOST):8082"
+            - name: DASHBOARD_ORIGIN
+              value: "https://$(DASHBOARD_SERVICE_HOST)"
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: control-plane-secrets
+                  key: GITHUB_TOKEN
+                  optional: true
+            # Admin API secret for /v1/admin/* endpoints.
+            # Falls back to CONTROL_PLANE_SECRET if not set.
+            # - name: CONFIG_WATCH_AUTH_ADMIN_API_SECRET
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: control-plane-secrets
+            #       key: ADMIN_API_SECRET
+            #       optional: true
+            # Broadcast mode for horizontal scaling. Use "Postgres" when running
+            # multiple control-plane replicas behind a load balancer.
+            # - name: CONFIG_WATCH_BROADCAST_MODE
+            #   value: "Local"
           volumeMounts:
             - name: config
               mountPath: /etc/config-watch
@@ -96,13 +165,13 @@ spec:
               mountPath: /var/lib/config-watch
           readinessProbe:
             httpGet:
-              path: /v1/metrics
+              path: /healthz
               port: 8082
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /v1/metrics
+              path: /healthz
               port: 8082
             initialDelaySeconds: 20
             periodSeconds: 30
@@ -121,3 +190,9 @@ spec:
         # Snapshots/repos cache — lost on pod restart. Swap for a PVC if you need durability.
         - name: data
           emptyDir: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: control-plane
+  namespace: config-watch

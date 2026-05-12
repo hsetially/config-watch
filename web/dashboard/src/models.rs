@@ -131,7 +131,7 @@ pub enum ViewMode {
     Compare,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FilterState {
     pub environment: Option<String>,
     pub host_id: Option<String>,
@@ -140,6 +140,22 @@ pub struct FilterState {
     pub severity: Option<String>,
     pub since: Option<String>,
     pub until: Option<String>,
+    pub diff_format: Option<String>,
+}
+
+impl Default for FilterState {
+    fn default() -> Self {
+        Self {
+            environment: None,
+            host_id: None,
+            path_prefix: None,
+            filename: None,
+            severity: None,
+            since: None,
+            until: None,
+            diff_format: Some("context".to_string()),
+        }
+    }
 }
 
 impl FilterState {

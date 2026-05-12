@@ -20,9 +20,10 @@ impl EventPublisher {
         hostname: &str,
         environment: &str,
         agent_version: &str,
+        tls_required: bool,
     ) -> Self {
         Self {
-            client: ControlPlaneClient::new(base_url, auth_token),
+            client: ControlPlaneClient::new(base_url, auth_token, tls_required),
             host_id,
             hostname: hostname.to_string(),
             environment: environment.to_string(),

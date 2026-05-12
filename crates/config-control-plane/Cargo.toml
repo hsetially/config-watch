@@ -9,6 +9,7 @@ rust-version.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
+axum-extra.workspace = true
 base64 = "0.22"
 camino.workspace = true
 chrono.workspace = true
@@ -31,6 +32,14 @@ config-storage = { path = "../config-storage" }
 config-transport = { path = "../config-transport" }
 config-workflow = { path = "../config-workflow" }
 config-snapshot = { path = "../config-snapshot" }
+config-diff = { path = "../config-diff" }
+lru = "0.12"
+better-auth.workspace = true
+sha2.workspace = true
+constant_time_eq = "0.3"
+hmac = "0.12"
+form_urlencoded = "1"
+url.workspace = true
 
 [dev-dependencies]
 testcontainers.workspace = true

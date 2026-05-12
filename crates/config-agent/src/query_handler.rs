@@ -1,10 +1,13 @@
 use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use base64::Engine;
 use serde::Serialize;
 
 use crate::redaction::RedactionEngine;
+use config_snapshot::store::SnapshotStore;
+use config_transport::agent_query::{PreviewRevision, SnapshotGone};
 use config_transport::tunnel::FileContentResponse;
 
 const MAX_CONTENT_BYTES: u64 = 10 * 1024 * 1024; // 10 MB limit
@@ -33,6 +36,9 @@ pub struct FilePreviewResponse {
 pub struct QueryHandler {
     redaction: RedactionEngine,
     watch_roots: Vec<String>,
+    /// Optional snapshot store. Required for `preview` calls with a non-default
+    /// revision; if absent (e.g. test setups), snapshot revisions return Gone.
+    snapshot_store: Option<Arc<SnapshotStore>>,
 }
 
 impl QueryHandler {
@@ -40,6 +46,15 @@ impl QueryHandler {
         watch_roots: Vec<String>,
         redaction_patterns: Vec<String>,
         preview_max_bytes: usize,
+    ) -> Self {
+        Self::with_snapshot_store(watch_roots, redaction_patterns, preview_max_bytes, None)
+    }
+
+    pub fn with_snapshot_store(
+        watch_roots: Vec<String>,
+        redaction_patterns: Vec<String>,
+        preview_max_bytes: usize,
+        snapshot_store: Option<Arc<SnapshotStore>>,
     ) -> Self {
         // Resolve relative watch roots to absolute paths so that incoming absolute query paths
         // match correctly on Windows (an absolute path cannot start_with a relative path).
@@ -59,6 +74,7 @@ impl QueryHandler {
         Self {
             redaction: RedactionEngine::new(&redaction_patterns, preview_max_bytes),
             watch_roots: resolved_roots,
+            snapshot_store,
         }
     }
 
@@ -66,6 +82,7 @@ impl QueryHandler {
         if config_auth::policy::is_path_denied(path) {
             anyhow::bail!("path denied by security policy: {}", path);
         }
+        // C6: resolve the path before checking watch roots to prevent traversal.
         let resolved_query = {
             let p = std::path::Path::new(path);
             if p.is_absolute() {
@@ -131,9 +148,58 @@ impl QueryHandler {
         })
     }
 
+    /// Backward-compatible preview of the file as it currently is on disk.
     pub fn preview(&self, path: &str) -> Result<FilePreviewResponse> {
+        self.preview_blocking(path, &PreviewRevision::Current)
+    }
+
+    /// Revision-aware preview. `Current` reads from disk; `Snapshot { hash }`
+    /// reads from the local snapshot store. Returns `SnapshotGone` if the
+    /// requested snapshot is no longer present.
+    pub async fn preview_revision(
+        &self,
+        path: &str,
+        revision: &PreviewRevision,
+    ) -> Result<FilePreviewResponse> {
         self.check_path(path)?;
 
+        match revision {
+            PreviewRevision::Current => self.render_preview_from_bytes_disk(path),
+            PreviewRevision::Snapshot { content_hash } => {
+                let store = self.snapshot_store.as_ref().ok_or_else(|| {
+                    SnapshotGone(
+                        "snapshot store not configured on this agent".to_string(),
+                    )
+                })?;
+                if !store.content_exists(content_hash) {
+                    return Err(SnapshotGone(format!(
+                        "snapshot {} not present (evicted by retention)",
+                        content_hash
+                    ))
+                    .into());
+                }
+                let bytes = store.read_content(content_hash).await.with_context(|| {
+                    format!("failed to read snapshot {} from local store", content_hash)
+                })?;
+                let raw_content = String::from_utf8_lossy(&bytes).into_owned();
+                Ok(self.render_preview_from_string(path, raw_content))
+            }
+        }
+    }
+
+    /// Synchronous fast path used by the existing axum handler and tunnel
+    /// callers; only valid for `PreviewRevision::Current`.
+    fn preview_blocking(
+        &self,
+        path: &str,
+        revision: &PreviewRevision,
+    ) -> Result<FilePreviewResponse> {
+        debug_assert!(matches!(revision, PreviewRevision::Current));
+        self.check_path(path)?;
+        self.render_preview_from_bytes_disk(path)
+    }
+
+    fn render_preview_from_bytes_disk(&self, path: &str) -> Result<FilePreviewResponse> {
         let p = Path::new(path);
         if !p.exists() {
             return Ok(FilePreviewResponse {
@@ -147,20 +213,22 @@ impl QueryHandler {
 
         let raw_content =
             std::fs::read_to_string(p).with_context(|| format!("failed to read file: {}", path))?;
+        Ok(self.render_preview_from_string(path, raw_content))
+    }
 
+    fn render_preview_from_string(&self, path: &str, raw_content: String) -> FilePreviewResponse {
         let redacted = self.redaction.redact_yaml(&raw_content);
         let truncated = redacted.len() > self.redaction.max_preview_bytes;
         let preview = self.redaction.truncate(&redacted).to_string();
-
         let redacted_keys = find_redacted_keys(&raw_content, &self.redaction);
 
-        Ok(FilePreviewResponse {
+        FilePreviewResponse {
             path: path.to_string(),
             exists: true,
             content: Some(preview),
             truncated,
             redacted_keys,
-        })
+        }
     }
 
     /// Read a chunk of raw file content (no redaction, no truncation).

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use tokio::sync::mpsc;
@@ -23,16 +23,44 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
         agent_id = %cfg.agent_id,
         environment = %cfg.environment,
         roots = ?cfg.watch_roots,
+        watch_mode = %cfg.watch_mode,
+        poll_interval_secs = cfg.poll_interval_secs,
         "agent starting"
     );
 
-    let snapshot_store = config_snapshot::store::SnapshotStore::new(&cfg.snapshot_dir)?;
+    // Structured startup diagnostics
+    for root in &cfg.watch_roots {
+        let mount_info = crate::watcher::detect_mount_info(&root.root_path.to_string());
+        tracing::info!(
+            path = %mount_info.path,
+            mount_point = ?mount_info.mount_point,
+            fs_type = ?mount_info.fs_type,
+            is_nfs = mount_info.is_nfs,
+            exists = root.root_path.exists(),
+            "watch root mount info"
+        );
+    }
+    let (difft_path, difft_available) = config_diff::find_difft_binary();
+    tracing::info!(
+        difftastic_available = difft_available,
+        difftastic_path = %difft_path.display(),
+        "difftastic detection"
+    );
+    tracing::info!(
+        snapshot_dir = %cfg.snapshot_dir,
+        spool_dir = %cfg.spool_dir,
+        snapshot_dir_exists = cfg.snapshot_dir.exists(),
+        spool_dir_exists = cfg.spool_dir.exists(),
+        "storage directories"
+    );
+
+    let snapshot_store = Arc::new(config_snapshot::store::SnapshotStore::new(&cfg.snapshot_dir)?);
     let spool = SpoolWriter::new(&cfg.spool_dir, cfg.max_spool_events, cfg.max_spool_bytes)?;
     let pipeline = Pipeline::new(cfg.clone(), host_id);
 
     // Baseline scan: snapshot all existing files so the first modification
     // has a proper previous version to diff against.
-    match crate::pipeline::baseline_scan(&cfg, &snapshot_store).await {
+    match crate::pipeline::baseline_scan(&cfg, snapshot_store.as_ref()).await {
         Ok(stats) => tracing::info!(
             scanned = stats.files_scanned,
             baselines = stats.baselines_created,
@@ -50,6 +78,7 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
         &hostname,
         &cfg.environment,
         "0.1.0",
+        cfg.tls_required,
     );
 
     match publisher.register(serde_json::json!({})).await {
@@ -57,6 +86,11 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
             tracing::info!(credential_expires = ?resp.credential_expires_at, "registered with control plane")
         }
         Err(e) => tracing::warn!(error = %e, "registration failed, will retry on heartbeat"),
+    }
+
+    // Publish initial snapshots for all tracked files
+    if let Err(e) = crate::pipeline::publish_initial_snapshots(&publisher, snapshot_store.as_ref(), host_id).await {
+        tracing::warn!(error = %e, "initial snapshot publishing failed, continuing without initial state sync");
     }
 
     // Replay pending spool entries
@@ -82,11 +116,16 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
         .iter()
         .map(|r| r.root_path.to_string())
         .collect();
-    let query_handler = Arc::new(QueryHandler::new(
-        watch_roots,
+    let query_handler = Arc::new(QueryHandler::with_snapshot_store(
+        watch_roots.clone(),
         cfg.redaction_patterns.clone(),
         cfg.content_preview_max_bytes,
+        Some(snapshot_store.clone()),
     ));
+
+    // Create shared state for watcher backend reporting
+    let watch_backend: Arc<RwLock<String>> = Arc::new(RwLock::new(String::new()));
+    let metrics = crate::metrics::AgentMetrics::new();
 
     // Start tunnel if enabled (requires successful registration to have a valid token)
     let tunnel_handle = if cfg.tunnel_enabled {
@@ -99,7 +138,23 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
         None
     };
 
-    let agent_state = AgentState { query_handler };
+    let config_info = Arc::new(crate::api::ConfigInfo {
+        agent_id: cfg.agent_id.clone(),
+        environment: cfg.environment.clone(),
+        watch_mode: cfg.watch_mode.clone(),
+        poll_interval_secs: cfg.poll_interval_secs,
+        watch_roots,
+    });
+
+    let agent_state = AgentState {
+        query_handler,
+        agent_secret: cfg.agent_api_secret.clone(),
+        metrics: metrics.clone(),
+        watch_backend: watch_backend.clone(),
+        spool_dir: cfg.spool_dir.clone(),
+        snapshot_dir: cfg.snapshot_dir.clone(),
+        config_info: config_info.clone(),
+    };
     let agent_router = build_agent_router(agent_state);
     let api_bind = cfg.agent_api_bind_addr.clone();
     let api_handle = tokio::spawn(async move {
@@ -111,7 +166,7 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
             }
         };
         tracing::info!(addr = %api_bind, "agent query API listening");
-        if let Err(e) = axum::serve(listener, agent_router.into_make_service()).await {
+        if let Err(e) = axum::serve(listener, agent_router).await {
             tracing::error!(error = %e, "agent API server error");
         }
     });
@@ -120,13 +175,23 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
     let heartbeat_interval = Duration::from_secs(cfg.heartbeat_interval_secs);
     let heartbeat_publisher = publisher.clone_spool_depth_handle();
     let heartbeat_spool = spool.clone_for_heartbeat();
+    let heartbeat_metrics = metrics.clone();
     let heartbeat_handle = tokio::spawn(async move {
         let mut interval = tokio::time::interval(heartbeat_interval);
         loop {
             interval.tick().await;
             let depth = heartbeat_spool.pending_count();
+            heartbeat_metrics.spool_depth.store(depth as u64, std::sync::atomic::Ordering::Relaxed);
             if let Err(e) = heartbeat_publisher.heartbeat(depth, 0).await {
                 tracing::warn!(error = %e, "heartbeat failed");
+            } else {
+                heartbeat_metrics.last_control_plane_contact.store(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                    std::sync::atomic::Ordering::Relaxed,
+                );
             }
         }
     });
@@ -155,7 +220,7 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
     let (raw_tx, mut raw_rx) = mpsc::channel::<crate::watcher::RawWatchEvent>(256);
     let (debounced_tx, mut debounced_rx) = mpsc::channel::<crate::debounce::DebouncedEvent>(64);
 
-    let watcher = FileWatcher::new(cfg.clone(), raw_tx);
+    let watcher = FileWatcher::new(cfg.clone(), raw_tx, watch_backend.clone());
     watcher.start().await?;
 
     let debounce_window_ms = cfg.debounce_window_ms;
@@ -192,10 +257,11 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
             Some(event) = debounced_rx.recv() => {
                 tracing::debug!(path = %event.canonical_path, kind = ?event.event_kind, "processing debounced event");
 
-                let decision = pipeline.snapshot_acquire(&event, &snapshot_store).await?;
+                let decision = pipeline.snapshot_acquire(&event, snapshot_store.as_ref()).await?;
 
                 match decision {
                     crate::pipeline::SnapshotDecision::Unchanged => {
+                        metrics.increment(&metrics.events_suppressed_unchanged);
                         tracing::info!(path = %event.canonical_path, "unchanged, skipping");
                         continue;
                     }
@@ -280,11 +346,20 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
 
                         match publisher.publish(&change_event, &change_event.idempotency_key).await {
                             Ok(_) => {
+                                metrics.increment(&metrics.events_published);
+                                metrics.last_control_plane_contact.store(
+                                    std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs(),
+                                    std::sync::atomic::Ordering::Relaxed,
+                                );
                                 if let Err(e) = spool.mark_delivered(&change_event.event_id).await {
                                     tracing::warn!(error = %e, "failed to mark event delivered");
                                 }
                             }
                             Err(_) => {
+                                metrics.increment(&metrics.events_publish_failed);
                                 let attempts = spool.increment_attempts(&change_event.event_id)?;
                                 if attempts >= max_publish_retries {
                                     if let Err(e) = spool.mark_failed(&change_event.event_id, "max retries exceeded").await {

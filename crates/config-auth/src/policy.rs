@@ -24,12 +24,31 @@ pub fn is_path_denied(path: &str) -> bool {
     false
 }
 
+/// C6 fix: canonicalize the path and check it stays within an allowed root.
+/// Rejects symlinks that escape watch roots and broken symlinks.
 pub fn is_path_allowed(path: &str, watch_roots: &[&str]) -> bool {
     if is_path_denied(path) {
         return false;
     }
-    let p = Path::new(path);
-    watch_roots.iter().any(|root| p.starts_with(root))
+    // Canonicalize the queried path to resolve .. and symlinks.
+    let canonical = match std::fs::canonicalize(path) {
+        Ok(c) => c,
+        Err(_) => {
+            // Broken symlink or inaccessible — reject.
+            return false;
+        }
+    };
+    watch_roots.iter().any(|root| {
+        let canonical_root = match std::fs::canonicalize(root) {
+            Ok(r) => r,
+            Err(_) => {
+                // Root doesn't exist on disk yet — fall back to lexical check.
+                // This is less safe but allows newly-created roots.
+                return canonical.starts_with(Path::new(root));
+            }
+        };
+        canonical.starts_with(&canonical_root)
+    })
 }
 
 #[cfg(test)]

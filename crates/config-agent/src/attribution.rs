@@ -127,9 +127,13 @@ mod tests {
             max_spool_bytes: 524288000,
             max_file_size_bytes: 1048576,
             agent_api_bind_addr: "0.0.0.0:9090".into(),
+            agent_api_secret: String::new(),
             tunnel_enabled: true,
+            tls_required: false,
             tunnel_reconnect_base_secs: 1,
             tunnel_reconnect_max_secs: 30,
+            watch_mode: "auto".into(),
+            poll_interval_secs: 2,
             diff: config_diff::DiffConfig::default(),
         })
     }

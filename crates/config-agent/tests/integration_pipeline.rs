@@ -33,9 +33,13 @@ fn make_config(watch_root: &str) -> AgentConfig {
         max_spool_bytes: 500 * 1024 * 1024,
         max_file_size_bytes: 1024 * 1024,
         agent_api_bind_addr: "0.0.0.0:9090".to_string(),
+        agent_api_secret: String::new(),
+        tls_required: false,
         tunnel_enabled: true,
         tunnel_reconnect_base_secs: 1,
         tunnel_reconnect_max_secs: 30,
+        watch_mode: "auto".to_string(),
+        poll_interval_secs: 2,
         diff: config_diff::DiffConfig::default(),
     }
 }

@@ -199,7 +199,7 @@ On the remote VM (e.g., GCP, AWS, Azure), create an agent config:
 agent_id = "<unique-uuid>"
 environment = "production"
 control_plane_base_url = "https://random-words.trycloudflare.com"
-enrollment_token = "dev-secret-change-me"
+enrollment_token = "dev-only-secret-change-me-in-production-at-least-32-chars"
 
 [[watch_roots]]
 root_path = "/etc/myapp"
@@ -492,11 +492,12 @@ None currently. The previously documented `path_prefix` filter bug has been fixe
 |---|---|---|
 | `bind_addr` | `127.0.0.1:8082` | Listen address |
 | `database_url` | — | Postgres connection string |
-| `control_plane_secret` | `dev-secret-change-me` | HMAC key for agent credentials |
+| `control_plane_secret` | — | HMAC key for agent credentials. **Also used as the enrollment token that agents must present on registration.** Must be >= 32 characters; startup rejects default/weak values. |
 | `query_timeout_secs` | `10` | Timeout for agent tunnel queries |
 | `snapshot_data_dir` | `./data/snapshots` | Directory for content snapshots (used by workflow content resolver) |
 | `repos_dir` | `./data/repos` | Directory for cloned git repositories (used by workflow executor) |
 | `github_token` | — | GitHub personal access token for file-content proxy and workflow PR creation (optional for public repos) |
+| `broadcast_mode` | `local` | Event fan-out mode: `local` (single-pod) or `postgres` (multi-pod via LISTEN/NOTIFY) |
 
 All keys support `CONFIG_WATCH_*` environment variable overrides (e.g., `CONFIG_WATCH_DATABASE_URL`).
 
@@ -507,6 +508,7 @@ All keys support `CONFIG_WATCH_*` environment variable overrides (e.g., `CONFIG_
 | `agent_id` | — | UUID identifying this agent instance |
 | `environment` | `default` | Environment label (prod, staging, etc.) |
 | `control_plane_base_url` | — | Control plane URL |
+| `enrollment_token` | — | Shared secret for agent registration. **Must match `control_plane_secret` in the control plane config.** |
 | `watch_roots` | — | Array of `{ root_path, recursive }` |
 | `debounce_window_ms` | `500` | Burst suppression window |
 | `snapshot_dir` | — | Directory for content snapshots |
@@ -574,8 +576,8 @@ All keys support `CONFIG_WATCH_*` environment variable overrides (e.g., `CONFIG_
 
 ## Security model
 
-- **Agent authentication**: HMAC-SHA256 credentials issued on registration. Token format: `{host_id}|{expires_utc}|{hmac_hex}`. Verified via `X-Agent-Token` header.
-- **Enrollment**: New agents present an enrollment token (`X-Enrollment-Token`) matching the control plane secret.
+- **Agent authentication**: HMAC-SHA256 credentials issued on registration. Token format: `{host_id}|{expires_utc}|{hmac_hex}`. Verified via `X-Agent-Token` header. The enrollment token (`X-Enrollment-Token`) is only accepted on the registration endpoint.
+- **Enrollment**: New agents present an enrollment token (`X-Enrollment-Token`) matching the control plane secret (`control_plane_secret`). After successful registration, the agent receives an HMAC credential and uses `X-Agent-Token` for all subsequent requests. **The `enrollment_token` in the agent config must match `control_plane_secret` in the control plane config.**
 - **Path deny list**: `/etc/ssl`, `/etc/ssh`, and any path containing `private` are always denied, regardless of watch roots.
 - **Content redaction**: File previews mask values matching `(?i)(token|secret|password|key|credential)` patterns with `[REDACTED]`.
 - **Request body limit**: 1 MB on control plane endpoints.

@@ -1,4 +1,18 @@
 bind_addr = "127.0.0.1:8082"
+control_plane_secret = "dev-only-secret-change-me-in-production-at-least-32-chars"
 database_url = "postgres://postgres:postgres@localhost:5432/config_watch"
 repos_dir = "./data/repos"
 github_token = ""
+
+[diff]
+format = "context"          # unified | context | full_file | side_by_side | raw
+context_lines = 3           # only used when format = "context"
+side_by_side_width = 120     # only used when format = "side_by_side"
+
+[auth]
+secret = "dev-only-auth-secret-change-me-in-production-at-least-32-chars"
+base_url = "http://localhost:8082"
+tls_required = false
+require_approval = true
+# admin_api_secret = "dev-only-admin-secret-change-me-in-production"
+trusted_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8080", "http://localhost:8082", "http://127.0.0.1:8080", "http://127.0.0.1:8082"]

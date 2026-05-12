@@ -3,6 +3,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Control-plane base URL. The dashboard reads this at runtime to build all
+         API and WebSocket URLs. Replace at deploy time per environment
+         (e.g. via envsubst in the container entrypoint). -->
+    <meta name="api-base-url" content="http://localhost:8082">
     <title>Config Watch Dashboard</title>
     <link data-trunk rel="css" href="styles/main.css"/>
 </head>

@@ -13,7 +13,8 @@ mod common;
 use common::*;
 
 async fn send_req(state: AppState, req: Request<Body>) -> (StatusCode, Value) {
-    let app = build_router(state);
+    let auth = make_test_auth();
+    let app = build_router(state, auth);
     let response = app.oneshot(req).await.unwrap();
     let status = response.status();
     let body = response.into_body();

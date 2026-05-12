@@ -1,9 +1,11 @@
-use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::rc::Rc;
-use web_sys::HtmlInputElement;
+
+use serde::{Deserialize, Serialize};
+use web_sys::{HtmlInputElement, HtmlSelectElement};
 use yew::{
-    function_component, html, use_effect_with, Callback, Html, Properties, TargetCast,
-    UseStateHandle,
+    function_component, html, use_effect_with, use_node_ref, Callback, Html, NodeRef, Properties,
+    TargetCast, UseStateHandle,
 };
 
 use crate::api;
@@ -16,6 +18,7 @@ use crate::storage;
 pub struct FileCompareProps {
     pub hosts: Rc<Vec<HostInfo>>,
     pub server_url: String,
+    pub csrf_token: Option<String>,
     pub on_fetch_hosts: Callback<()>,
 }
 
@@ -31,6 +34,16 @@ pub enum ComparePhase {
 pub enum ColumnType {
     Agent,
     Github,
+}
+
+#[derive(Debug, Clone)]
+struct ChangeGroup {
+    start: usize,
+    end: usize,
+    #[allow(dead_code)]
+    added: usize,
+    #[allow(dead_code)]
+    removed: usize,
 }
 
 fn default_columns() -> Vec<CompareColumn> {
@@ -106,6 +119,11 @@ pub fn file_compare(props: &FileCompareProps) -> Html {
     let diff_lines_right: UseStateHandle<Vec<DiffLine>> = yew::use_state(Vec::new);
     let phase: UseStateHandle<ComparePhase> = yew::use_state(|| ComparePhase::Idle);
     let github_token: UseStateHandle<String> = yew::use_state(storage::load_github_token);
+    let diff_format: UseStateHandle<String> = yew::use_state(|| "side_by_side".to_string());
+    let change_groups: UseStateHandle<Vec<ChangeGroup>> = yew::use_state(Vec::new);
+    let active_change: UseStateHandle<Option<usize>> = yew::use_state(|| None);
+    let unified_lines: UseStateHandle<Vec<DiffLine>> = yew::use_state(Vec::new);
+    let diff_content_ref: NodeRef = use_node_ref();
 
     // Persist columns and types to localStorage whenever they change.
     {
@@ -162,6 +180,9 @@ pub fn file_compare(props: &FileCompareProps) -> Html {
         let diff_lines_right = diff_lines_right.clone();
         let phase = phase.clone();
         let github_token = github_token.clone();
+        let unified_lines = unified_lines.clone();
+        let change_groups = change_groups.clone();
+        let csrf_token = props.csrf_token.clone();
         Callback::from(move |_: ()| {
             let cols = (*columns).clone();
 
@@ -214,6 +235,8 @@ pub fn file_compare(props: &FileCompareProps) -> Html {
                 let diff_left = diff_lines_left.clone();
                 let diff_right = diff_lines_right.clone();
                 let phase = phase.clone();
+                let unified = unified_lines.clone();
+                let groups = change_groups.clone();
                 let num_cols = num;
 
                 match &source {
@@ -258,10 +281,12 @@ pub fn file_compare(props: &FileCompareProps) -> Html {
                                     diff_left.clone(),
                                     diff_right.clone(),
                                     phase.clone(),
+                                    unified.clone(),
+                                    groups.clone(),
                                 );
                             },
                         );
-                        api::fetch_file_content(&server, &host_id, &path, None, None, on_result);
+                        api::fetch_file_content(&server, &host_id, &path, None, None, csrf_token.clone(), on_result, None);
                     }
                     ColumnSource::Github { url } => {
                         let label = label.clone();
@@ -296,6 +321,8 @@ pub fn file_compare(props: &FileCompareProps) -> Html {
                                     diff_left.clone(),
                                     diff_right.clone(),
                                     phase.clone(),
+                                    unified.clone(),
+                                    groups.clone(),
                                 );
                             },
                         );
@@ -304,7 +331,7 @@ pub fn file_compare(props: &FileCompareProps) -> Html {
                         } else {
                             Some(token.as_str())
                         };
-                        api::fetch_github_file_content(&server, url, token_ref, on_result);
+                        api::fetch_github_file_content(&server, url, token_ref, csrf_token.clone(), on_result, None);
                     }
                 }
             }
@@ -371,10 +398,104 @@ pub fn file_compare(props: &FileCompareProps) -> Html {
     let has_hosts = !host_options.is_empty();
     let has_github_column = (*column_types).contains(&ColumnType::Github);
 
+    let current_format = (*diff_format).clone();
+    let num_changes = (*change_groups).len();
+
+    let on_format_change = {
+        let diff_format = diff_format.clone();
+        let unified_lines = unified_lines.clone();
+        let change_groups = change_groups.clone();
+        let results_state = results.clone();
+        let active_change = active_change.clone();
+        Callback::from(move |e: yew::Event| {
+            let select: HtmlSelectElement = e.target_unchecked_into();
+            let val = select.value();
+            // When format changes, recompute the unified diff if needed
+            if val != "side_by_side" {
+                let all = (*results_state).clone();
+                let left_content = all
+                    .first()
+                    .and_then(|r| r.as_ref())
+                    .and_then(|r| r.content.clone())
+                    .unwrap_or_default();
+                let right_content = all
+                    .get(1)
+                    .and_then(|r| r.as_ref())
+                    .and_then(|r| r.content.clone())
+                    .unwrap_or_default();
+                if !left_content.is_empty() || !right_content.is_empty() {
+                    let (uni, groups) = compute_unified(&left_content, &right_content);
+                    unified_lines.set(uni);
+                    change_groups.set(groups);
+                }
+            }
+            diff_format.set(val);
+            active_change.set(None);
+        })
+    };
+
+    let scroll_to_change = {
+        let diff_content_ref = diff_content_ref.clone();
+        let active_change = active_change.clone();
+        let num_changes = num_changes;
+        Callback::from(move |direction: i32| {
+            let current = (*active_change).unwrap_or(if direction < 0 { num_changes } else { usize::MAX });
+            let next = if direction < 0 {
+                if current == 0 { num_changes.saturating_sub(1) } else { current.saturating_sub(1) }
+            } else {
+                if current >= num_changes.saturating_sub(1) { 0 } else { current + 1 }
+            };
+            if num_changes == 0 {
+                return;
+            }
+            active_change.set(Some(next));
+            // Scroll to the change group element
+            if let Some(el) = diff_content_ref.cast::<web_sys::Element>() {
+                let id = format!("change-group-{}", next);
+                if let Some(target) = el.query_selector(&format!("#{}", id)).ok().flatten() {
+                    target.scroll_into_view_with_bool(true);
+                }
+            }
+        })
+    };
+
+    let prev_change = {
+        let scroll = scroll_to_change.clone();
+        Callback::from(move |_: ()| scroll.emit(-1))
+    };
+    let next_change = {
+        let scroll = scroll_to_change.clone();
+        Callback::from(move |_: ()| scroll.emit(1))
+    };
+
     html! {
         <div class="compare-panel">
             <div class="compare-panel-header">
                 <h2>{"File Comparison"}</h2>
+                <div class="compare-header-controls">
+                    if matches!(*phase, ComparePhase::Done) && num_changes > 0 {
+                        <div class="compare-nav">
+                            <button class="compare-nav-btn" onclick={move |_| prev_change.emit(())} title="Previous change">{"<"}</button>
+                            <span class="compare-nav-info">
+                                { format!("{}/{}", (*active_change).map(|a| a + 1).unwrap_or(1), num_changes) }
+                            </span>
+                            <button class="compare-nav-btn" onclick={move |_| next_change.emit(())} title="Next change">{">"}</button>
+                        </div>
+                    }
+                    <div class="compare-format-select">
+                        <label for="compare-diff-format">{"Format:"}</label>
+                        <select
+                            id="compare-diff-format"
+                            value={current_format.clone()}
+                            onchange={on_format_change}
+                        >
+                            <option value="side_by_side">{"Side by Side"}</option>
+                            <option value="unified">{"Unified"}</option>
+                            <option value="context">{"Context"}</option>
+                            <option value="full_file">{"Full File"}</option>
+                        </select>
+                    </div>
+                </div>
                 <button
                     class="link-btn"
                     onclick={{
@@ -636,24 +757,35 @@ pub fn file_compare(props: &FileCompareProps) -> Html {
                 }}
 
                 if matches!(*phase, ComparePhase::Done) {
-                    <div class="compare-columns">
-                        <div class="compare-column">
-                            <div class="compare-column-header">
-                                { (*columns).first().map(|c| if c.label.is_empty() { "Column 1".to_string() } else { c.label.clone() }).unwrap_or_default() }
+                    if current_format == "side_by_side" {
+                        <div class="compare-columns">
+                            <div class="compare-column">
+                                <div class="compare-column-header">
+                                    { (*columns).first().map(|c| if c.label.is_empty() { "Column 1".to_string() } else { c.label.clone() }).unwrap_or_default() }
+                                </div>
+                                <div class="compare-column-content" ref={diff_content_ref.clone()}>
+                                    { render_diff_lines(&diff_lines_left, true, (*change_groups).clone()) }
+                                </div>
                             </div>
-                            <div class="compare-column-content">
-                                { render_diff_lines(&diff_lines_left, true) }
+                            <div class="compare-column">
+                                <div class="compare-column-header">
+                                    { (*columns).get(1).map(|c| if c.label.is_empty() { "Column 2".to_string() } else { c.label.clone() }).unwrap_or_default() }
+                                </div>
+                                <div class="compare-column-content">
+                                    { render_diff_lines(&diff_lines_right, false, (*change_groups).clone()) }
+                                </div>
                             </div>
                         </div>
-                        <div class="compare-column">
-                            <div class="compare-column-header">
-                                { (*columns).get(1).map(|c| if c.label.is_empty() { "Column 2".to_string() } else { c.label.clone() }).unwrap_or_default() }
-                            </div>
-                            <div class="compare-column-content">
-                                { render_diff_lines(&diff_lines_right, false) }
-                            </div>
-                        </div>
-                    </div>
+                    } else {
+                        { render_unified_view(
+                            &columns,
+                            &unified_lines,
+                            current_format.as_str(),
+                            &change_groups,
+                            num_changes,
+                            diff_content_ref.clone(),
+                        )}
+                    }
 
                     { for (*columns).iter().skip(2).enumerate().map(|(extra_idx, col)| {
                         let result = (*results).get(extra_idx + 2).and_then(|r| r.clone());
@@ -683,6 +815,51 @@ pub fn file_compare(props: &FileCompareProps) -> Html {
     }
 }
 
+fn render_unified_view(
+    columns: &[CompareColumn],
+    unified: &[DiffLine],
+    format: &str,
+    change_groups: &[ChangeGroup],
+    num_changes: usize,
+    diff_content_ref: NodeRef,
+) -> Html {
+    let col1_label = columns
+        .first()
+        .map(|c| {
+            if c.label.is_empty() {
+                "Column 1".to_string()
+            } else {
+                c.label.clone()
+            }
+        })
+        .unwrap_or_default();
+    let col2_label = columns
+        .get(1)
+        .map(|c| {
+            if c.label.is_empty() {
+                "Column 2".to_string()
+            } else {
+                c.label.clone()
+            }
+        })
+        .unwrap_or_default();
+    html! {
+        <div class="compare-unified-panel">
+            <div class="compare-unified-header">
+                <span class="compare-unified-label-old">{ col1_label }</span>
+                <span class="compare-unified-arrow">{" > "}</span>
+                <span class="compare-unified-label-new">{ col2_label }</span>
+                <span class="compare-change-count">
+                    { format!("{} change{}", num_changes, if num_changes == 1 { "" } else { "s" }) }
+                </span>
+            </div>
+            <div class="compare-column-content compare-unified-content" ref={diff_content_ref}>
+                { render_unified_lines(unified, format, change_groups) }
+            </div>
+        </div>
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn collect_result(
     idx: usize,
@@ -694,6 +871,8 @@ fn collect_result(
     diff_left: UseStateHandle<Vec<DiffLine>>,
     diff_right: UseStateHandle<Vec<DiffLine>>,
     phase: UseStateHandle<ComparePhase>,
+    unified: UseStateHandle<Vec<DiffLine>>,
+    change_groups: UseStateHandle<Vec<ChangeGroup>>,
 ) {
     fetched.borrow_mut()[idx] = Some(result);
     *counter.borrow_mut() += 1;
@@ -714,13 +893,27 @@ fn collect_result(
             .unwrap_or_default();
 
         let (left_lines, right_lines) = compute_diff(&left_content, &right_content);
+        let (uni_lines, groups) = compute_unified(&left_content, &right_content);
         diff_left.set(left_lines);
         diff_right.set(right_lines);
+        unified.set(uni_lines);
+        change_groups.set(groups);
         phase.set(ComparePhase::Done);
     }
 }
 
-fn render_diff_lines(lines: &[DiffLine], is_left: bool) -> Html {
+fn render_diff_lines(
+    lines: &[DiffLine],
+    is_left: bool,
+    change_groups: Vec<ChangeGroup>,
+) -> Html {
+    // Build a set of line indices that start change groups
+    let change_starts: HashSet<usize> = if is_left {
+        change_groups.iter().map(|g| g.start).collect()
+    } else {
+        HashSet::new()
+    };
+
     html! {
         for lines.iter().enumerate().map(|(i, line)| {
             let kind_class = match line.kind {
@@ -730,11 +923,24 @@ fn render_diff_lines(lines: &[DiffLine], is_left: bool) -> Html {
             };
             let skip = (is_left && line.kind == DiffLineKind::Added)
                 || (!is_left && line.kind == DiffLineKind::Removed);
+
+            // Determine which change group this line belongs to
+            let group_id = if is_left {
+                change_groups.iter().enumerate()
+                    .find(|(_, g)| i >= g.start && i <= g.end)
+                    .map(|(idx, _)| idx)
+            } else {
+                None
+            };
+
+            let is_group_start = change_starts.contains(&i);
+            let marker_id = if is_group_start { group_id.map(|gid| format!("change-group-{}", gid)) } else { None };
+
             if skip {
-                html! { <div class="compare-line compare-line-placeholder" key={i.to_string()}></div> }
+                html! { <div class="compare-line compare-line-placeholder" key={i.to_string()} id={marker_id}></div> }
             } else {
                 html! {
-                    <div class={format!("compare-line {}", kind_class)} key={i.to_string()}>
+                    <div class={format!("compare-line {}", kind_class)} key={i.to_string()} id={marker_id}>
                         <span class="compare-line-num">
                             { line.line_num.map(|n| n.to_string()).unwrap_or_default() }
                         </span>
@@ -895,6 +1101,259 @@ fn compute_diff(left: &str, right: &str) -> (Vec<DiffLine>, Vec<DiffLine>) {
     }
 
     (left_lines, right_lines)
+}
+
+fn compute_unified(left: &str, right: &str) -> (Vec<DiffLine>, Vec<ChangeGroup>) {
+    use similar::{ChangeTag, TextDiff};
+
+    let diff = TextDiff::from_lines(left, right);
+
+    let mut lines: Vec<DiffLine> = Vec::new();
+    let mut groups: Vec<ChangeGroup> = Vec::new();
+    let mut left_num: u32 = 0;
+    let mut right_num: u32 = 0;
+
+    let mut change_vec: Vec<(ChangeTag, String)> = Vec::new();
+    for op in diff.ops() {
+        for change in diff.iter_changes(op) {
+            change_vec.push((change.tag(), change.to_string_lossy().to_string()));
+        }
+    }
+
+    let mut i = 0;
+    while i < change_vec.len() {
+        let (tag, ref content) = change_vec[i];
+        match tag {
+            ChangeTag::Equal => {
+                left_num += 1;
+                right_num += 1;
+                lines.push(DiffLine {
+                    line_num: Some(left_num),
+                    kind: DiffLineKind::Context,
+                    content: content.clone(),
+                    words: vec![WordSegment {
+                        content: content.clone(),
+                        changed: false,
+                    }],
+                });
+                i += 1;
+            }
+            ChangeTag::Delete => {
+                let mut deleted_texts = vec![content.clone()];
+                let mut j = i + 1;
+                while j < change_vec.len() && change_vec[j].0 == ChangeTag::Delete {
+                    deleted_texts.push(change_vec[j].1.clone());
+                    j += 1;
+                }
+                let mut inserted_texts: Vec<String> = Vec::new();
+                while j < change_vec.len() && change_vec[j].0 == ChangeTag::Insert {
+                    inserted_texts.push(change_vec[j].1.clone());
+                    j += 1;
+                }
+
+                let change_start = lines.len();
+                let mut added = 0usize;
+                let mut removed = 0usize;
+
+                // Emit removed lines
+                for text in &deleted_texts {
+                    left_num += 1;
+                    removed += 1;
+                    lines.push(DiffLine {
+                        line_num: Some(left_num),
+                        kind: DiffLineKind::Removed,
+                        content: text.clone(),
+                        words: vec![WordSegment {
+                            content: text.clone(),
+                            changed: true,
+                        }],
+                    });
+                }
+                // Emit added lines
+                for text in &inserted_texts {
+                    right_num += 1;
+                    added += 1;
+                    lines.push(DiffLine {
+                        line_num: Some(right_num),
+                        kind: DiffLineKind::Added,
+                        content: text.clone(),
+                        words: vec![WordSegment {
+                            content: text.clone(),
+                            changed: true,
+                        }],
+                    });
+                }
+                // Pair word diffs for equal-length blocks
+                let paired = deleted_texts.len().min(inserted_texts.len());
+                for k in 0..paired {
+                    let left_words = word_diff(&deleted_texts[k], &inserted_texts[k], true);
+                    let right_words = word_diff(&deleted_texts[k], &inserted_texts[k], false);
+                    if let Some(l) = lines.get_mut(change_start + k) {
+                        l.words = left_words;
+                    }
+                    if let Some(l) = lines.get_mut(change_start + deleted_texts.len() + k) {
+                        l.words = right_words;
+                    }
+                }
+
+                let change_end = lines.len().saturating_sub(1);
+                groups.push(ChangeGroup {
+                    start: change_start,
+                    end: change_end,
+                    added,
+                    removed,
+                });
+
+                i = j;
+            }
+            ChangeTag::Insert => {
+                right_num += 1;
+                let start = lines.len();
+                lines.push(DiffLine {
+                    line_num: Some(right_num),
+                    kind: DiffLineKind::Added,
+                    content: content.clone(),
+                    words: vec![WordSegment {
+                        content: content.clone(),
+                        changed: true,
+                    }],
+                });
+                groups.push(ChangeGroup {
+                    start,
+                    end: start,
+                    added: 1,
+                    removed: 0,
+                });
+                i += 1;
+            }
+        }
+    }
+
+    (lines, groups)
+}
+
+fn render_unified_lines(
+    lines: &[DiffLine],
+    format: &str,
+    change_groups: &[ChangeGroup],
+) -> Html {
+    let context_lines: usize = 3;
+    let mut visible_indices: HashSet<usize> = HashSet::new();
+
+    if format == "full_file" {
+        for idx in 0..lines.len() {
+            visible_indices.insert(idx);
+        }
+    } else if format == "context" {
+        for group in change_groups {
+            let ctx_start = group.start.saturating_sub(context_lines);
+            let ctx_end = (group.end + context_lines).min(lines.len().saturating_sub(1));
+            for idx in ctx_start..=ctx_end {
+                visible_indices.insert(idx);
+            }
+        }
+    } else {
+        // unified: show all change lines
+        for group in change_groups {
+            for idx in group.start..=group.end {
+                visible_indices.insert(idx);
+            }
+        }
+    }
+
+    let mut html_lines: Vec<Html> = Vec::new();
+    let mut last_shown: Option<usize> = None;
+    let mut skip_count: usize = 0;
+
+    for (i, line) in lines.iter().enumerate() {
+        let visible = visible_indices.contains(&i);
+
+        if !visible {
+            skip_count += 1;
+            continue;
+        }
+
+        // Before showing a visible line, emit a skip marker if we skipped lines
+        if skip_count > 0 {
+            let collapse_key = if let Some(prev) = last_shown {
+                prev + 1
+            } else {
+                0
+            };
+            html_lines.push(html! {
+                <div class="compare-skip-marker" key={format!("skip-{}", collapse_key)}>
+                    { format!("... {} unchanged lines hidden ...", skip_count) }
+                </div>
+            });
+            skip_count = 0;
+        }
+
+        // Determine group membership for marker IDs
+        let group_id = change_groups
+            .iter()
+            .enumerate()
+            .find(|(_, g)| i >= g.start && i <= g.end)
+            .map(|(idx, _)| idx);
+
+        let is_group_start = group_id.is_some()
+            && change_groups
+                .get(group_id.unwrap())
+                .map(|g| g.start == i)
+                .unwrap_or(false);
+        let marker_id = if is_group_start {
+            group_id.map(|gid| format!("change-group-{}", gid))
+        } else {
+            None
+        };
+
+        let kind_class = match line.kind {
+            DiffLineKind::Added => "compare-line-added",
+            DiffLineKind::Removed => "compare-line-removed",
+            _ => "compare-line-context",
+        };
+
+        let prefix = match line.kind {
+            DiffLineKind::Added => "+",
+            DiffLineKind::Removed => "-",
+            _ => " ",
+        };
+
+        html_lines.push(html! {
+            <div class={format!("compare-line {}", kind_class)} key={i.to_string()} id={marker_id}>
+                <span class="compare-line-num">
+                    { line.line_num.map(|n| n.to_string()).unwrap_or_default() }
+                </span>
+                <span class="compare-line-prefix">{ prefix }</span>
+                <span class="compare-line-content">
+                    { for line.words.iter().map(|seg| {
+                        if seg.changed {
+                            html! { <span class="compare-word-hl">{ &seg.content }</span> }
+                        } else {
+                            html! { <span>{ &seg.content }</span> }
+                        }
+                    }).collect::<Vec<Html>>() }
+                </span>
+            </div>
+        });
+
+        last_shown = Some(i);
+    }
+
+    // Emit trailing skip if needed
+    if skip_count > 0 {
+        let collapse_key = if let Some(prev) = last_shown {
+            prev + 1
+        } else {
+            0
+        };
+        html_lines.push(html! {
+            <div class="compare-skip-marker" key={format!("skip-{}", collapse_key)}>
+                { format!("... {} unchanged lines hidden ...", skip_count) }
+            </div>
+        });
+    }
+
+    html! { for html_lines }
 }
 
 fn word_diff(left_line: &str, right_line: &str, is_left: bool) -> Vec<WordSegment> {

@@ -24,6 +24,40 @@ PrivateTmp=true
 Environment=RUST_LOG=config_control_plane=info
 EnvironmentFile=-/etc/config-watch/control-plane.env
 
+# All ControlPlaneConfig fields can be overridden via CONFIG_WATCH_ prefix.
+# Set these in /etc/config-watch/control-plane.env or the TOML config file.
+#
+# Required:
+#   CONFIG_WATCH_DATABASE_URL              Postgres connection string
+#   CONFIG_WATCH_CONTROL_PLANE_SECRET      HMAC secret for agent tokens (>=32 chars)
+#   CONFIG_WATCH_AUTH_SECRET               BetterAuth session signing key (>=32 chars)
+#
+# Auth (required for production):
+#   CONFIG_WATCH_AUTH_BASE_URL             Public URL of this control plane
+#   CONFIG_WATCH_AUTH_TRUSTED_ORIGINS      Comma-separated CORS origins
+#
+# Auth (optional):
+#   CONFIG_WATCH_AUTH_REQUIRE_APPROVAL     Require admin approval for sign-ups (default: true)
+#   CONFIG_WATCH_AUTH_ADMIN_API_SECRET     Secret for admin endpoints (falls back to CONTROL_PLANE_SECRET)
+#   CONFIG_WATCH_AUTH_TLS_REQUIRED         Enforce HTTPS (default: true)
+#   CONFIG_WATCH_AUTH_GITHUB_CLIENT_ID     GitHub OAuth client ID
+#   CONFIG_WATCH_AUTH_GITHUB_CLIENT_SECRET GitHub OAuth client secret
+#   CONFIG_WATCH_AUTH_GOOGLE_CLIENT_ID     Google OAuth client ID
+#   CONFIG_WATCH_AUTH_GOOGLE_CLIENT_SECRET Google OAuth client secret
+#
+# Optional:
+#   CONFIG_WATCH_BIND_ADDR                 Listen address (default: 127.0.0.1:8082)
+#   CONFIG_WATCH_QUERY_TIMEOUT_SECS        Agent query timeout (default: 10)
+#   CONFIG_WATCH_SNAPSHOT_DATA_DIR          Snapshot storage directory
+#   CONFIG_WATCH_REPOS_DIR                 Git repos directory
+#   CONFIG_WATCH_GITHUB_TOKEN              GitHub PAT for private repos
+#   CONFIG_WATCH_BROADCAST_MODE            Event broadcast: "Local" or "Postgres" (default: Local)
+#
+# Diff rendering:
+#   CONFIG_WATCH_DIFF__FORMAT              unified|context|full_file|side_by_side|raw
+#   CONFIG_WATCH_DIFF__CONTEXT_LINES        Context lines (default: 3)
+#   CONFIG_WATCH_DIFF__SIDE_BY_SIDE_WIDTH   Column width (default: 120)
+
 # Logging
 StandardOutput=journal
 StandardError=journal

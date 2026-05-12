@@ -48,10 +48,69 @@ fn parse_format_prefix(text: &str) -> (DiffFormat, &str) {
     }
 }
 
+/// Sentinel prefixes the lazy-diff endpoint emits when the diff cannot be
+/// rendered. We intercept these before the format parser so the UI shows a
+/// friendly message instead of `@@error:...` literal text.
+fn parse_status_prefix(text: &str) -> Option<(StatusKind, &str)> {
+    if let Some(rest) = text.strip_prefix("@@error:host_offline@@\n") {
+        return Some((StatusKind::HostOffline, rest));
+    }
+    if let Some(rest) = text.strip_prefix("@@error:snapshots_evicted@@\n") {
+        return Some((StatusKind::SnapshotsEvicted, rest));
+    }
+    if let Some(rest) = text.strip_prefix("@@error:fetch_failed@@\n") {
+        return Some((StatusKind::FetchFailed, rest));
+    }
+    if let Some(rest) = text.strip_prefix("@@warn:previous_unavailable@@\n") {
+        return Some((StatusKind::PreviousUnavailable, rest));
+    }
+    None
+}
+
+#[derive(Debug, Clone, Copy)]
+enum StatusKind {
+    HostOffline,
+    SnapshotsEvicted,
+    FetchFailed,
+    PreviousUnavailable,
+}
+
 #[function_component(DiffViewer)]
 pub fn diff_viewer(props: &DiffViewerProps) -> Html {
-    let (format, text) = parse_format_prefix(&props.diff_text);
+    // Hooks must be called unconditionally on every render, before any early
+    // returns. Violating this causes Yew's "Hooks are called conditionally" panic.
     let expanded: UseStateHandle<bool> = yew::use_state(|| !props.collapsed);
+
+    if let Some((status, detail)) = parse_status_prefix(&props.diff_text) {
+        let (banner_class, headline) = match status {
+            StatusKind::HostOffline => ("diff-banner-error", "Host offline"),
+            StatusKind::SnapshotsEvicted => {
+                ("diff-banner-error", "Snapshot bytes evicted by retention")
+            }
+            StatusKind::FetchFailed => ("diff-banner-error", "Diff fetch failed"),
+            StatusKind::PreviousUnavailable => (
+                "diff-banner-warn",
+                "Previous snapshot unavailable — showing current only",
+            ),
+        };
+        // For the warn case, the rest of the body is a normal diff render;
+        // recurse so it's parsed and styled. For errors, just show the detail.
+        let body = if matches!(status, StatusKind::PreviousUnavailable) {
+            html! { <DiffViewer diff_text={detail.to_string()} collapsed={props.collapsed} /> }
+        } else {
+            html! { <pre class="diff-error-detail">{ detail }</pre> }
+        };
+        return html! {
+            <div class="diff-viewer">
+                <div class={format!("diff-status-banner {}", banner_class)}>
+                    <span class="diff-status-headline">{ headline }</span>
+                </div>
+                { body }
+            </div>
+        };
+    }
+
+    let (format, text) = parse_format_prefix(&props.diff_text);
 
     let is_expanded = *expanded;
 

@@ -1,7 +1,11 @@
+use std::collections::VecDeque;
+use std::sync::Arc;
+
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use config_control_plane::ingest::{IngestOutcome, IngestService};
+use config_control_plane::services::LocalEventDedup;
 
 mod common;
 
@@ -26,6 +30,7 @@ async fn ingest_valid_event_returns_accepted() {
         .unwrap();
 
     let (broadcast_tx, _broadcast_rx) = tokio::sync::broadcast::channel(256);
+    let local_event_dedup: LocalEventDedup = Arc::new(std::sync::Mutex::new(VecDeque::new()));
 
     let snapshot_store = make_snapshot_store();
     let body = common::make_change_event_json(
@@ -35,7 +40,7 @@ async fn ingest_valid_event_returns_accepted() {
         &format!("ingest-key-{}", host_id),
     );
 
-    let outcome = IngestService::ingest_change(&pool, &broadcast_tx, &snapshot_store, body)
+    let outcome = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
         .await
         .unwrap();
 
@@ -57,19 +62,20 @@ async fn ingest_duplicate_idempotency_key_returns_duplicate() {
 
     let snapshot_store = make_snapshot_store();
     let (broadcast_tx, _) = tokio::sync::broadcast::channel(256);
+    let local_event_dedup: LocalEventDedup = Arc::new(std::sync::Mutex::new(VecDeque::new()));
     let key = format!("dupe-key-{}", host_id);
     let key_ref: &str = &key;
     let body = common::make_change_event_json(&host_id, "/etc/dupe.yaml", "modified", key_ref);
 
     // First ingest
     let outcome1 =
-        IngestService::ingest_change(&pool, &broadcast_tx, &snapshot_store, body.clone())
+        IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body.clone())
             .await
             .unwrap();
     assert!(matches!(outcome1, IngestOutcome::Accepted { .. }));
 
     // Second ingest with same key
-    let outcome2 = IngestService::ingest_change(&pool, &broadcast_tx, &snapshot_store, body)
+    let outcome2 = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
         .await
         .unwrap();
     assert!(matches!(outcome2, IngestOutcome::Duplicate { .. }));
@@ -87,13 +93,14 @@ async fn ingest_wrong_schema_version_returns_rejected() {
     let pool = setup_pool().await;
     let snapshot_store = make_snapshot_store();
     let (broadcast_tx, _) = tokio::sync::broadcast::channel(256);
+    let local_event_dedup: LocalEventDedup = Arc::new(std::sync::Mutex::new(VecDeque::new()));
 
     let body = serde_json::json!({
         "schema_version": "2.0",
         "event": { "idempotency_key": "test" }
     });
 
-    let outcome = IngestService::ingest_change(&pool, &broadcast_tx, &snapshot_store, body)
+    let outcome = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
         .await
         .unwrap();
     assert!(matches!(outcome, IngestOutcome::Rejected { .. }));
@@ -104,12 +111,13 @@ async fn ingest_missing_event_returns_rejected() {
     let pool = setup_pool().await;
     let snapshot_store = make_snapshot_store();
     let (broadcast_tx, _) = tokio::sync::broadcast::channel(256);
+    let local_event_dedup: LocalEventDedup = Arc::new(std::sync::Mutex::new(VecDeque::new()));
 
     let body = serde_json::json!({
         "schema_version": "1.0"
     });
 
-    let outcome = IngestService::ingest_change(&pool, &broadcast_tx, &snapshot_store, body)
+    let outcome = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
         .await
         .unwrap();
     match outcome {
@@ -125,6 +133,7 @@ async fn ingest_missing_idempotency_key_returns_rejected() {
     let pool = setup_pool().await;
     let snapshot_store = make_snapshot_store();
     let (broadcast_tx, _) = tokio::sync::broadcast::channel(256);
+    let local_event_dedup: LocalEventDedup = Arc::new(std::sync::Mutex::new(VecDeque::new()));
 
     let body = serde_json::json!({
         "schema_version": "1.0",
@@ -135,7 +144,7 @@ async fn ingest_missing_idempotency_key_returns_rejected() {
         }
     });
 
-    let outcome = IngestService::ingest_change(&pool, &broadcast_tx, &snapshot_store, body)
+    let outcome = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
         .await
         .unwrap();
     match outcome {
@@ -156,6 +165,7 @@ async fn ingest_broadcasts_realtime_message() {
 
     let snapshot_store = make_snapshot_store();
     let (broadcast_tx, mut broadcast_rx) = tokio::sync::broadcast::channel(256);
+    let local_event_dedup: LocalEventDedup = Arc::new(std::sync::Mutex::new(VecDeque::new()));
 
     let body = common::make_change_event_json(
         &host_id,
@@ -164,7 +174,7 @@ async fn ingest_broadcasts_realtime_message() {
         &format!("broadcast-key-{}", host_id),
     );
 
-    let _ = IngestService::ingest_change(&pool, &broadcast_tx, &snapshot_store, body)
+    let _ = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
         .await
         .unwrap();
 
@@ -193,6 +203,7 @@ async fn ingest_touches_host_heartbeat() {
 
     let snapshot_store = make_snapshot_store();
     let (broadcast_tx, _) = tokio::sync::broadcast::channel(256);
+    let local_event_dedup: LocalEventDedup = Arc::new(std::sync::Mutex::new(VecDeque::new()));
     let body = common::make_change_event_json(
         &host_id,
         "/etc/hb.yaml",
@@ -200,7 +211,7 @@ async fn ingest_touches_host_heartbeat() {
         &format!("hb-key-{}", host_id),
     );
 
-    let _ = IngestService::ingest_change(&pool, &broadcast_tx, &snapshot_store, body)
+    let _ = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
         .await
         .unwrap();
 

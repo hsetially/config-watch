@@ -14,6 +14,7 @@ pub enum TunnelMessageType {
 pub enum QueryKind {
     Stat,
     Preview,
+    PreviewRevision,
     Content,
 }
 
@@ -27,6 +28,9 @@ pub struct QueryRequestPayload {
     /// For Content queries: max bytes to read. None = read to end.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u64>,
+    /// For PreviewRevision queries: the content_hash of the snapshot to retrieve.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
 }
 
 /// Response payload for a Content query.
@@ -91,6 +95,26 @@ impl TunnelMessage {
             path,
             offset: None,
             limit: None,
+            content_hash: None,
+        };
+        Self {
+            msg_type: TunnelMessageType::QueryRequest,
+            request_id: Some(request_id),
+            payload: Some(serde_json::to_value(payload).unwrap_or_default()),
+        }
+    }
+
+    pub fn preview_revision_query_request(
+        request_id: String,
+        path: String,
+        content_hash: String,
+    ) -> Self {
+        let payload = QueryRequestPayload {
+            kind: QueryKind::PreviewRevision,
+            path,
+            offset: None,
+            limit: None,
+            content_hash: Some(content_hash),
         };
         Self {
             msg_type: TunnelMessageType::QueryRequest,
@@ -110,6 +134,7 @@ impl TunnelMessage {
             path,
             offset,
             limit,
+            content_hash: None,
         };
         Self {
             msg_type: TunnelMessageType::QueryRequest,
@@ -192,6 +217,27 @@ mod tests {
         assert_eq!(payload.path, "/etc/app/big-config.yaml");
         assert_eq!(payload.offset, Some(0));
         assert_eq!(payload.limit, Some(65536));
+    }
+
+    #[test]
+    fn roundtrip_preview_revision_query_request() {
+        let msg = TunnelMessage::preview_revision_query_request(
+            "test-id".into(),
+            "/etc/app/config.yaml".into(),
+            "abc123def456".into(),
+        );
+        let json = serde_json::to_string(&msg).unwrap();
+        let decoded: TunnelMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.msg_type, TunnelMessageType::QueryRequest);
+        let payload: QueryRequestPayload = decoded
+            .payload
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap();
+        assert_eq!(payload.kind, QueryKind::PreviewRevision);
+        assert_eq!(payload.path, "/etc/app/config.yaml");
+        assert_eq!(payload.content_hash, Some("abc123def456".to_string()));
+        assert!(payload.offset.is_none());
+        assert!(payload.limit.is_none());
     }
 
     #[test]

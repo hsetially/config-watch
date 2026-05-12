@@ -1,4 +1,5 @@
 use anyhow::Result;
+use base64::Engine;
 
 use config_shared::events::{ChangeEvent, ChangeKind, Severity};
 use config_shared::ids::{EventId, HostId, SnapshotId};
@@ -22,9 +23,7 @@ fn build_glob_set(patterns: &[String]) -> globset::GlobSet {
             }
         }
     }
-    builder
-        .build()
-        .unwrap_or_else(|_| globset::GlobSet::empty())
+    builder.build().unwrap_or_else(|_| globset::GlobSet::empty())
 }
 
 /// Scan all watch roots and snapshot existing files that don't yet have a baseline.
@@ -93,6 +92,11 @@ pub async fn baseline_scan(
                 Ok(c) => c,
                 Err(_) => continue,
             };
+            // H11: cap file reads at 5 MiB to prevent YAML alias amplification or oversize reads
+            if content.len() > 5 * 1024 * 1024 {
+                tracing::warn!(path = %path, size = content.len(), "baseline: skipping file exceeding 5 MiB cap");
+                continue;
+            }
             let hash = config_snapshot::hash::compute_blake3(&content);
 
             if let Err(e) = snapshot_store.write_snapshot(&hash, &content).await {
@@ -205,12 +209,17 @@ impl Pipeline {
             ChangeKind::Created
             | ChangeKind::Modified
             | ChangeKind::MetadataOnly
-            | ChangeKind::PermissionChanged => {
+            | ChangeKind::PermissionChanged
+            | ChangeKind::InitialSnapshot => {
                 if !path.exists() {
                     return Ok(SnapshotDecision::Unchanged);
                 }
 
                 let content = tokio::fs::read(path).await?;
+                // H11: cap file reads at 5 MiB
+                if content.len() > 5 * 1024 * 1024 {
+                    anyhow::bail!("file exceeds 5 MiB size cap: {} ({} bytes)", path, content.len());
+                }
                 let current_hash = config_snapshot::hash::compute_blake3(&content);
 
                 let prev_hash = snapshot_store.get_current_hash(path).unwrap_or_default();
@@ -374,4 +383,82 @@ impl Pipeline {
             content_b64,
         }
     }
+}
+
+/// Publish initial snapshots for all tracked files to the control plane.
+/// Called after baseline scan and registration so the control plane has the
+/// full current state of each file, not just future deltas.
+pub async fn publish_initial_snapshots(
+    publisher: &crate::publish::EventPublisher,
+    snapshot_store: &config_snapshot::store::SnapshotStore,
+    host_id: HostId,
+) -> Result<usize> {
+    let tracked = snapshot_store.list_tracked_files();
+    let mut published = 0usize;
+
+    for (canonical_path, current_hash) in &tracked {
+        let content = match snapshot_store.read_content(current_hash).await {
+            Ok(data) => data,
+            Err(e) => {
+                tracing::warn!(path = %canonical_path, error = %e, "initial snapshot: failed to read content, skipping");
+                continue;
+            }
+        };
+
+        let content_b64 = base64::engine::general_purpose::STANDARD.encode(&content);
+        let file_size_after = content.len() as u64;
+
+        let diff_summary = config_shared::snapshots::DiffSummary {
+            changed_line_estimate: 0,
+            file_size_before: 0,
+            file_size_after,
+            comment_only_hint: false,
+            syntax_equivalent_hint: false,
+            yaml_lint_findings: vec![],
+        };
+
+        let idempotency_key = config_shared::validation::derive_idempotency_key(
+            &host_id,
+            canonical_path,
+            "",
+            current_hash,
+            chrono::Utc::now(),
+        );
+
+        let event = ChangeEvent {
+            event_id: EventId::new(),
+            idempotency_key,
+            host_id,
+            canonical_path: canonical_path.clone(),
+            event_time: chrono::Utc::now(),
+            event_kind: ChangeKind::InitialSnapshot,
+            previous_snapshot_id: None,
+            current_snapshot_id: Some(SnapshotId::new()),
+            diff_summary: Some(diff_summary),
+            diff_render: None,
+            attribution: config_shared::attribution::Attribution::unknown(),
+            severity: Severity::Info,
+            content_b64: Some(content_b64),
+        };
+
+        match publisher.publish(&event, &event.idempotency_key).await {
+            Ok(_) => {
+                published += 1;
+            }
+            Err(e) => {
+                tracing::warn!(path = %canonical_path, error = %e, "initial snapshot: publish failed");
+            }
+        }
+
+        // Rate-limit to avoid overwhelming the control plane
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+
+    tracing::info!(
+        published = published,
+        total = tracked.len(),
+        "initial snapshots published"
+    );
+
+    Ok(published)
 }

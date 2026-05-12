@@ -1,9 +1,11 @@
 pub mod db_helpers;
 
+use std::sync::Arc;
+
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use config_control_plane::services::AppState;
+use config_control_plane::services::{AppState, AuthState};
 use config_storage::db::Database;
 
 #[allow(dead_code)]
@@ -19,6 +21,26 @@ pub async fn setup_test_db() -> PgPool {
     db.pool().clone()
 }
 
+pub fn make_test_auth() -> AuthState {
+    let config = better_auth::AuthConfig::new(
+        "test-secret-key-that-is-at-least-32-characters-long",
+    )
+    .base_url("http://localhost:3000");
+    let db = better_auth::adapters::SqlxAdapter::from_pool(
+        sqlx::PgPool::connect_lazy("postgres://localhost/nonexistent").unwrap(),
+    );
+    Arc::new(tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(async {
+            better_auth::AuthBuilder::new(config)
+                .database(db)
+                .plugin(better_auth::plugins::EmailPasswordPlugin::new().enable_signup(true))
+                .build()
+                .await
+                .expect("failed to build test auth")
+        })
+    }))
+}
+
 #[allow(dead_code)]
 pub fn make_app_state(pool: sqlx::PgPool, secret: &str) -> AppState {
     let db = Database::from_pool(pool);
@@ -27,7 +49,7 @@ pub fn make_app_state(pool: sqlx::PgPool, secret: &str) -> AppState {
         tmp.path().join("snapshots").to_str().unwrap(),
     ))
     .expect("create snapshot store");
-    AppState::new(db, secret.to_string(), snapshot_store)
+    AppState::new(db, secret.to_string(), snapshot_store, make_test_auth())
 }
 
 #[allow(dead_code)]
@@ -42,7 +64,7 @@ pub fn make_app_state_with_broadcast_capacity(
         tmp.path().join("snapshots").to_str().unwrap(),
     ))
     .expect("create snapshot store");
-    AppState::with_broadcast_capacity(db, secret.to_string(), capacity, snapshot_store)
+    AppState::with_broadcast_capacity(db, secret.to_string(), capacity, snapshot_store, make_test_auth())
 }
 
 #[allow(dead_code)]

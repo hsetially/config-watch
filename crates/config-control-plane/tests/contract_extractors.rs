@@ -1,12 +1,12 @@
 use axum::body::Body;
 use axum::extract::FromRequestParts;
 use axum::http::{Request, StatusCode};
-use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::sync::Arc;
 use uuid::Uuid;
 
-use config_control_plane::http::extractors::{AgentAuth, CorrelationId, OperatorAuth};
+use config_control_plane::http::extractors::{AgentAuth, CorrelationId};
 use config_control_plane::services::AppState;
-use config_storage::db::Database;
 
 mod common;
 
@@ -20,22 +20,33 @@ fn make_state(secret: &str) -> AppState {
         tmp.path().join("snapshots").to_str().unwrap(),
     ))
     .expect("create snapshot store");
+
+    // Create a dummy auth state for testing
+    let auth_config = better_auth::AuthConfig::new(
+        "test-secret-key-that-is-at-least-32-characters-long",
+    )
+    .base_url("http://localhost:3000");
+    let db = better_auth::adapters::SqlxAdapter::from_pool(
+        sqlx::PgPool::connect_lazy("postgres://localhost/nonexistent").unwrap(),
+    );
+    let auth_state = std::sync::Arc::new(tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(async {
+            better_auth::AuthBuilder::new(auth_config)
+                .database(db)
+                .plugin(better_auth::plugins::EmailPasswordPlugin::new().enable_signup(true))
+                .build()
+                .await
+                .expect("failed to build test auth")
+        })
+    }));
+
     AppState {
-        db: std::sync::Arc::new(Database::from_pool(
+        db: std::sync::Arc::new(config_storage::db::Database::from_pool(
             sqlx::PgPool::connect_lazy("postgres://localhost/nonexistent").unwrap(),
         )),
         broadcast_tx: tx,
         secret: secret.to_string(),
-        operator_keys: std::sync::Arc::new(HashMap::from([
-            (
-                "op-key-admin".to_string(),
-                ("admin-user".to_string(), "admin".to_string()),
-            ),
-            (
-                "op-key-viewer".to_string(),
-                ("viewer-user".to_string(), "viewer".to_string()),
-            ),
-        ])),
+        operator_keys: std::sync::Arc::new(std::collections::HashMap::new()),
         metrics: metrics.clone(),
         tunnel_registry: std::sync::Arc::new(config_control_plane::tunnel::AgentRegistry::new(
             metrics,
@@ -44,11 +55,16 @@ fn make_state(secret: &str) -> AppState {
         snapshot_store: std::sync::Arc::new(snapshot_store),
         repos_dir: "./data/repos".to_string(),
         github_token: None,
+        diff_service: std::sync::Arc::new(
+            config_control_plane::diff_service::DiffService::new(
+                config_diff::DiffConfig::default(),
+            ),
+        ),
+        auth: auth_state,
+        admin_api_secret: None,
+        require_approval: true,
+        local_event_dedup: Arc::new(std::sync::Mutex::new(VecDeque::new())),
     }
-}
-
-fn make_state_with_keys(secret: &str) -> AppState {
-    make_state(secret)
 }
 
 async fn extract_from_request<T: FromRequestParts<AppState>>(
@@ -151,50 +167,6 @@ async fn agent_auth_malformed_token_returns_401() {
         .body(Body::empty())
         .unwrap();
     let result = extract_from_request::<AgentAuth>(&state, req).await;
-    assert!(result.is_err());
-}
-
-#[tokio::test]
-async fn operator_auth_missing_bearer_returns_401() {
-    let state = make_state_with_keys("test-secret");
-    let req = Request::builder()
-        .method("GET")
-        .uri("/test")
-        .body(Body::empty())
-        .unwrap();
-    let result = extract_from_request::<OperatorAuth>(&state, req).await;
-    assert!(result.is_err());
-}
-
-#[tokio::test]
-async fn operator_auth_valid_key_returns_role() {
-    let state = make_state_with_keys("test-secret");
-    let req = Request::builder()
-        .method("GET")
-        .uri("/test")
-        .header("Authorization", "Bearer op-key-admin")
-        .body(Body::empty())
-        .unwrap();
-    let result = extract_from_request::<OperatorAuth>(&state, req).await;
-    assert!(result.is_ok(), "Expected Ok, got err: {:?}", result.err());
-    let auth = result.unwrap();
-    assert_eq!(auth.operator_id, "admin-user");
-    assert!(matches!(
-        auth.role,
-        config_control_plane::http::extractors::OperatorRole::Admin
-    ));
-}
-
-#[tokio::test]
-async fn operator_auth_unknown_key_returns_401() {
-    let state = make_state_with_keys("test-secret");
-    let req = Request::builder()
-        .method("GET")
-        .uri("/test")
-        .header("Authorization", "Bearer unknown-key")
-        .body(Body::empty())
-        .unwrap();
-    let result = extract_from_request::<OperatorAuth>(&state, req).await;
     assert!(result.is_err());
 }
 

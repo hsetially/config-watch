@@ -13,8 +13,12 @@ pub struct EventListProps {
     pub events: Rc<Vec<RealtimeMessage>>,
     pub expanded_id: Option<uuid::Uuid>,
     pub on_toggle: Callback<uuid::Uuid>,
+    /// When true, expanding an event triggers `on_fetch_diff` (used by the
+    /// History view to lazily populate `diff_render`). Distinct from the
+    /// `lazy_diff_endpoint` storage flag, which decides *how* the fetch is
+    /// served.
     #[prop_or_default]
-    pub lazy_diff: bool,
+    pub fetch_on_expand: bool,
     #[prop_or_default]
     pub on_fetch_diff: Callback<uuid::Uuid>,
     #[prop_or_default]
@@ -40,7 +44,7 @@ pub fn event_list(props: &EventListProps) -> Html {
     html! {
         <div class="event-list">
             { for props.events.iter().map(|event| {
-                render_event(event, props.expanded_id, &props.on_toggle, props.lazy_diff, &props.on_fetch_diff, &props.selected_events, &props.on_toggle_select, &props.hosts)
+                render_event(event, props.expanded_id, &props.on_toggle, props.fetch_on_expand, &props.on_fetch_diff, &props.selected_events, &props.on_toggle_select, &props.hosts)
             })}
             if show_pagination {
                 <div class="pagination">
@@ -78,7 +82,7 @@ fn render_event(
     event: &RealtimeMessage,
     expanded_id: Option<uuid::Uuid>,
     on_toggle: &Callback<uuid::Uuid>,
-    lazy_diff: bool,
+    fetch_on_expand: bool,
     on_fetch_diff: &Callback<uuid::Uuid>,
     selected_events: &HashSet<uuid::Uuid>,
     on_toggle_select: &Callback<uuid::Uuid>,
@@ -118,8 +122,19 @@ fn render_event(
         .unwrap_or(&event.path)
         .to_string();
 
-    // When expanding a lazy-diff event that has no diff_render, fetch it
-    if is_expanded && lazy_diff && event.diff_render.is_none() {
+    // On expand, fetch the diff. Two cases:
+    //   - lazy_diff_endpoint ON: always refetch from the CP `/diff` endpoint
+    //     so the configured CP-side `[diff]` format is honored even when the
+    //     agent already shipped a stored `diff_render` (rendered with the
+    //     agent's line_diff fallback when difftastic isn't on the agent host).
+    //     The callback in app.rs dedups via a per-session HashSet.
+    //   - lazy_diff_endpoint OFF: only fetch when diff_render is missing —
+    //     the post-fetch state update is the loop-breaker, so without that
+    //     `is_none()` guard expansion would loop forever.
+    if is_expanded
+        && fetch_on_expand
+        && (crate::storage::lazy_diff_endpoint_enabled() || event.diff_render.is_none())
+    {
         on_fetch_diff.emit(event_id);
     }
 
@@ -167,7 +182,7 @@ fn render_event(
                 <span class="event-summary">{ summary_text }</span>
             </div>
             { if is_expanded {
-                render_expanded_content(event, lazy_diff)
+                render_expanded_content(event, fetch_on_expand)
             } else {
                 html! {}
             }}
@@ -175,14 +190,14 @@ fn render_event(
     }
 }
 
-fn render_expanded_content(event: &RealtimeMessage, lazy_diff: bool) -> Html {
+fn render_expanded_content(event: &RealtimeMessage, fetch_on_expand: bool) -> Html {
     match &event.diff_render {
         Some(diff) if !diff.is_empty() => html! {
             <div class="event-diff">
                 <DiffViewer diff_text={diff.clone()} />
             </div>
         },
-        _ if lazy_diff => html! {
+        _ if fetch_on_expand => html! {
             <div class="event-no-diff">
                 <p>{"Loading diff..."}</p>
             </div>

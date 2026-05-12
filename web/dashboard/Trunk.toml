@@ -9,3 +9,8 @@ watch = ["src", "styles"]
 addresses = ["127.0.0.1"]
 port = 3000
 open = false
+
+# No serve.proxy blocks: the dashboard talks to the control plane directly
+# over CORS, using the URL configured in `<meta name="api-base-url">` in
+# index.html. The control plane authorizes the dashboard origin via
+# `[auth].trusted_origins` in control-plane.toml.

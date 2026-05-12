@@ -53,9 +53,21 @@ pub struct ControlPlaneClient {
 }
 
 impl ControlPlaneClient {
-    pub fn new(base_url: &str, auth_token: &str) -> Self {
+    pub fn new(base_url: &str, auth_token: &str, tls_required: bool) -> Self {
+        // L2: when `tls_required` is set (the production default), enforce
+        // `https_only` + min TLS 1.2 so a misconfigured http:// URL fails
+        // loudly. Dev opts out explicitly via `tls_required = false`.
+        let mut builder = reqwest::Client::builder();
+        if tls_required {
+            builder = builder
+                .https_only(true)
+                .min_tls_version(reqwest::tls::Version::TLS_1_2);
+        }
+        let http = builder
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
         Self {
-            http: reqwest::Client::new(),
+            http,
             base_url: base_url.to_string(),
             auth_token: std::sync::Arc::new(std::sync::Mutex::new(auth_token.to_string())),
         }

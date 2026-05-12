@@ -3,6 +3,7 @@ pub mod app;
 pub mod attribution;
 pub mod config;
 pub mod debounce;
+pub mod diagnose;
 pub mod health;
 pub mod metrics;
 pub mod pipeline;

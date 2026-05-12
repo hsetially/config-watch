@@ -2,6 +2,40 @@
 #
 # Builds the config-control-plane binary and packages it on a slim debian runtime.
 # Built and pushed by .github/workflows/docker-publish.yml.
+#
+# Runtime configuration is via TOML file (/etc/config-watch/control-plane.toml)
+# and/or CONFIG_WATCH_* environment variables. Key env vars:
+#
+#   Required:
+#     CONFIG_WATCH_DATABASE_URL          Postgres connection string
+#     CONFIG_WATCH_CONTROL_PLANE_SECRET HMAC secret for agent tokens (>=32 chars)
+#     CONFIG_WATCH_AUTH_SECRET           BetterAuth session signing key (>=32 chars)
+#
+#   Auth (required for production):
+#     CONFIG_WATCH_AUTH_BASE_URL         Public URL of this control plane (e.g. https://cp.example.com)
+#     CONFIG_WATCH_AUTH_TRUSTED_ORIGINS  Comma-separated CORS origins (e.g. "https://cp.example.com,http://localhost:3000")
+#
+#   Auth (optional):
+#     CONFIG_WATCH_AUTH_REQUIRE_APPROVAL  Require admin approval for new sign-ups (default: true)
+#     CONFIG_WATCH_AUTH_ADMIN_API_SECRET   Secret for admin API endpoints (falls back to CONTROL_PLANE_SECRET)
+#     CONFIG_WATCH_AUTH_TLS_REQUIRED       Enforce HTTPS for auth flows (default: true)
+#     CONFIG_WATCH_AUTH_GITHUB_CLIENT_ID     GitHub OAuth client ID
+#     CONFIG_WATCH_AUTH_GITHUB_CLIENT_SECRET GitHub OAuth client secret
+#     CONFIG_WATCH_AUTH_GOOGLE_CLIENT_ID     Google OAuth client ID
+#     CONFIG_WATCH_AUTH_GOOGLE_CLIENT_SECRET Google OAuth client secret
+#
+#   Optional:
+#     CONFIG_WATCH_BIND_ADDR             Listen address (default: 127.0.0.1:8082)
+#     CONFIG_WATCH_QUERY_TIMEOUT_SECS    Timeout for agent queries (default: 10)
+#     CONFIG_WATCH_SNAPSHOT_DATA_DIR     Directory for snapshot blobs (default: ./data/snapshots)
+#     CONFIG_WATCH_REPOS_DIR             Directory for git repos (default: ./data/repos)
+#     CONFIG_WATCH_GITHUB_TOKEN          GitHub personal access token for private repos
+#     CONFIG_WATCH_BROADCAST_MODE        Event broadcast mode: "Local" or "Postgres" (default: Local)
+#
+#   Diff rendering:
+#     CONFIG_WATCH_DIFF__FORMAT             Diff format: unified|context|full_file|side_by_side|raw
+#     CONFIG_WATCH_DIFF__CONTEXT_LINES      Context lines for unified/context format (default: 3)
+#     CONFIG_WATCH_DIFF__SIDE_BY_SIDE_WIDTH Column width for side_by_side format (default: 120)
 
 FROM rust:1-bookworm AS builder
 WORKDIR /src

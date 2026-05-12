@@ -13,16 +13,65 @@ RestartSec=5
 StartLimitIntervalSec=60
 StartLimitBurst=3
 
-# Security hardening
+# Security hardening (M6: comprehensive systemd sandboxing)
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/config-watch /var/log/config-watch
 PrivateTmp=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
 
 # Environment
 Environment=RUST_LOG=config_agent=info
 EnvironmentFile=-/etc/config-watch/agent.env
+
+# All AgentConfig fields can be overridden via CONFIG_WATCH_ prefix.
+# Set these in /etc/config-watch/agent.env or the TOML config file.
+#
+# Required:
+#   CONFIG_WATCH_AGENT_ID                   Unique UUID for this agent
+#   CONFIG_WATCH_ENVIRONMENT                 Environment label (e.g. production)
+#   CONFIG_WATCH_CONTROL_PLANE_BASE_URL      Control plane URL (e.g. https://cp.example.com)
+#   CONFIG_WATCH_WATCH_ROOTS__0__ROOT_PATH   First watched directory path
+#
+# Authentication:
+#   CONFIG_WATCH_ENROLLMENT_TOKEN           Token for initial registration
+#   CONFIG_WATCH_AGENT_API_SECRET           HMAC secret for query API (empty = no auth)
+#
+# Network:
+#   CONFIG_WATCH_AGENT_API_BIND_ADDR         Query API listen address (default: 127.0.0.1:9090)
+#   CONFIG_WATCH_TUNNEL_ENABLED             Enable WebSocket tunnel (default: true)
+#   CONFIG_WATCH_TUNNEL_RECONNECT_BASE_SECS  Initial reconnect backoff (default: 1)
+#   CONFIG_WATCH_TUNNEL_RECONNECT_MAX_SECS    Maximum reconnect backoff (default: 30)
+#   CONFIG_WATCH_TLS_REQUIRED               Require HTTPS for CP URL (default: true)
+#
+# Watch behavior:
+#   CONFIG_WATCH_DEBOUNCE_WINDOW_MS          Debounce window (default: 500)
+#   CONFIG_WATCH_MAX_FILE_SIZE_BYTES         Max file size to process (default: 1048576)
+#   CONFIG_WATCH_CONTENT_PREVIEW_MAX_BYTES  Max preview bytes (default: 4096)
+#
+# Watcher backend:
+#   CONFIG_WATCH_WATCH_MODE                  Watcher backend: "auto", "poll", or "inotify" (default: auto)
+#   CONFIG_WATCH_POLL_INTERVAL_SECS          Poll interval in seconds for poll mode (default: 2)
+#
+# Storage:
+#   CONFIG_WATCH_SNAPSHOT_DIR                Snapshot directory (default: /var/lib/config-watch/snapshots)
+#   CONFIG_WATCH_SPOOL_DIR                   Spool directory (default: /var/lib/config-watch/spool)
+#   CONFIG_WATCH_MAX_SPOOL_EVENTS            Max spool events (default: 10000)
+#   CONFIG_WATCH_MAX_SPOOL_BYTES             Max spool size (default: 524288000)
 
 # Logging
 StandardOutput=journal

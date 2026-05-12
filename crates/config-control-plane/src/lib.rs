@@ -1,10 +1,14 @@
 pub mod app;
+pub mod auth;
 pub mod config;
+pub mod diff_service;
 pub mod http;
 pub mod ingest;
 pub mod metrics;
+pub mod pg_notify;
 pub mod query;
 pub mod realtime;
 pub mod registry;
 pub mod services;
 pub mod tunnel;
+pub mod ws_ticket;
