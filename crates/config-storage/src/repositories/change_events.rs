@@ -118,7 +118,10 @@ impl ChangeEventsRepo {
             let placeholders: Vec<String> = (0..filters.event_kind_exclude.len())
                 .map(|i| format!("${}", param_idx + i as u32))
                 .collect();
-            query.push_str(&format!(" AND event_kind NOT IN ({})", placeholders.join(", ")));
+            query.push_str(&format!(
+                " AND event_kind NOT IN ({})",
+                placeholders.join(", ")
+            ));
             param_idx += filters.event_kind_exclude.len() as u32 - 1;
         }
 
@@ -203,7 +206,10 @@ impl ChangeEventsRepo {
             let placeholders: Vec<String> = (0..filters.event_kind_exclude.len())
                 .map(|i| format!("${}", start_idx + i as u32))
                 .collect();
-            query.push_str(&format!(" AND event_kind NOT IN ({})", placeholders.join(", ")));
+            query.push_str(&format!(
+                " AND event_kind NOT IN ({})",
+                placeholders.join(", ")
+            ));
         }
 
         let mut q = sqlx::query_as::<_, (i64,)>(&query);

@@ -286,7 +286,16 @@ pub fn file_compare(props: &FileCompareProps) -> Html {
                                 );
                             },
                         );
-                        api::fetch_file_content(&server, &host_id, &path, None, None, csrf_token.clone(), on_result, None);
+                        api::fetch_file_content(
+                            &server,
+                            &host_id,
+                            &path,
+                            None,
+                            None,
+                            csrf_token.clone(),
+                            on_result,
+                            None,
+                        );
                     }
                     ColumnSource::Github { url } => {
                         let label = label.clone();
@@ -331,7 +340,14 @@ pub fn file_compare(props: &FileCompareProps) -> Html {
                         } else {
                             Some(token.as_str())
                         };
-                        api::fetch_github_file_content(&server, url, token_ref, csrf_token.clone(), on_result, None);
+                        api::fetch_github_file_content(
+                            &server,
+                            url,
+                            token_ref,
+                            csrf_token.clone(),
+                            on_result,
+                            None,
+                        );
                     }
                 }
             }
@@ -437,13 +453,24 @@ pub fn file_compare(props: &FileCompareProps) -> Html {
     let scroll_to_change = {
         let diff_content_ref = diff_content_ref.clone();
         let active_change = active_change.clone();
-        let num_changes = num_changes;
         Callback::from(move |direction: i32| {
-            let current = (*active_change).unwrap_or(if direction < 0 { num_changes } else { usize::MAX });
-            let next = if direction < 0 {
-                if current == 0 { num_changes.saturating_sub(1) } else { current.saturating_sub(1) }
+            let current = (*active_change).unwrap_or(if direction < 0 {
+                num_changes
             } else {
-                if current >= num_changes.saturating_sub(1) { 0 } else { current + 1 }
+                usize::MAX
+            });
+            let next = if direction < 0 {
+                if current == 0 {
+                    num_changes.saturating_sub(1)
+                } else {
+                    current.saturating_sub(1)
+                }
+            } else {
+                if current >= num_changes.saturating_sub(1) {
+                    0
+                } else {
+                    current + 1
+                }
             };
             if num_changes == 0 {
                 return;
@@ -902,11 +929,7 @@ fn collect_result(
     }
 }
 
-fn render_diff_lines(
-    lines: &[DiffLine],
-    is_left: bool,
-    change_groups: Vec<ChangeGroup>,
-) -> Html {
+fn render_diff_lines(lines: &[DiffLine], is_left: bool, change_groups: Vec<ChangeGroup>) -> Html {
     // Build a set of line indices that start change groups
     let change_starts: HashSet<usize> = if is_left {
         change_groups.iter().map(|g| g.start).collect()
@@ -1232,11 +1255,7 @@ fn compute_unified(left: &str, right: &str) -> (Vec<DiffLine>, Vec<ChangeGroup>)
     (lines, groups)
 }
 
-fn render_unified_lines(
-    lines: &[DiffLine],
-    format: &str,
-    change_groups: &[ChangeGroup],
-) -> Html {
+fn render_unified_lines(lines: &[DiffLine], format: &str, change_groups: &[ChangeGroup]) -> Html {
     let context_lines: usize = 3;
     let mut visible_indices: HashSet<usize> = HashSet::new();
 

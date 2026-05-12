@@ -57,7 +57,12 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(db: Database, secret: String, snapshot_store: SnapshotStore, auth: AuthState) -> Self {
+    pub fn new(
+        db: Database,
+        secret: String,
+        snapshot_store: SnapshotStore,
+        auth: AuthState,
+    ) -> Self {
         Self::new_with_diff_config(db, secret, snapshot_store, DiffConfig::default(), auth)
     }
 
@@ -88,7 +93,9 @@ impl AppState {
             admin_api_secret: None,
             require_approval: true,
             tls_required: true,
-            local_event_dedup: Arc::new(std::sync::Mutex::new(VecDeque::with_capacity(LOCAL_EVENT_DEDUP_CAPACITY))),
+            local_event_dedup: Arc::new(std::sync::Mutex::new(VecDeque::with_capacity(
+                LOCAL_EVENT_DEDUP_CAPACITY,
+            ))),
         }
     }
 
@@ -124,7 +131,9 @@ impl AppState {
             admin_api_secret: None,
             require_approval: true,
             tls_required: true,
-            local_event_dedup: Arc::new(std::sync::Mutex::new(VecDeque::with_capacity(LOCAL_EVENT_DEDUP_CAPACITY))),
+            local_event_dedup: Arc::new(std::sync::Mutex::new(VecDeque::with_capacity(
+                LOCAL_EVENT_DEDUP_CAPACITY,
+            ))),
         }
     }
 

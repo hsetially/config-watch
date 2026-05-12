@@ -167,9 +167,7 @@ impl QueryHandler {
             PreviewRevision::Current => self.render_preview_from_bytes_disk(path),
             PreviewRevision::Snapshot { content_hash } => {
                 let store = self.snapshot_store.as_ref().ok_or_else(|| {
-                    SnapshotGone(
-                        "snapshot store not configured on this agent".to_string(),
-                    )
+                    SnapshotGone("snapshot store not configured on this agent".to_string())
                 })?;
                 if !store.content_exists(content_hash) {
                     return Err(SnapshotGone(format!(

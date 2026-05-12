@@ -37,7 +37,7 @@ struct ScrollAnchor {
 #[function_component(App)]
 pub fn app() -> Html {
     let auth_data: UseStateHandle<Option<storage::AuthData>> =
-        yew::use_state(|| storage::load_auth_data());
+        yew::use_state(storage::load_auth_data);
     let approval_pending: UseStateHandle<bool> = yew::use_state(|| false);
     let stream_events: UseStateHandle<Vec<RealtimeMessage>> = yew::use_state(Vec::new);
     let history_events: UseStateHandle<Vec<RealtimeMessage>> = yew::use_state(Vec::new);
@@ -188,7 +188,7 @@ pub fn app() -> Html {
         let pagination = pagination.clone();
         let filters = filters.clone();
         Callback::from(move |page: ChangesPage| {
-            let fmt = (*filters)
+            let fmt = filters
                 .diff_format
                 .clone()
                 .unwrap_or_else(|| "context".to_string());
@@ -227,7 +227,7 @@ pub fn app() -> Html {
             let server = (*server_url).clone();
             let id_str = event_id.to_string();
             let mode = *view_mode;
-            let diff_format = (*filters).diff_format.clone();
+            let diff_format = filters.diff_format.clone();
 
             if crate::storage::lazy_diff_endpoint_enabled() {
                 if !lazy_fetched.borrow_mut().insert(event_id) {
@@ -245,12 +245,9 @@ pub fn app() -> Html {
                     &id_str,
                     diff_format.as_deref(),
                     Callback::from(move |result: api::DiffFetch| {
-                        match result {
-                            api::DiffFetch::Unauthorized => {
-                                on_unauth.emit(());
-                                return;
-                            }
-                            _ => {}
+                        if let api::DiffFetch::Unauthorized = result {
+                            on_unauth.emit(());
+                            return;
                         }
                         let diff = match result {
                             api::DiffFetch::Ok { render, previous_unavailable } => {
@@ -698,7 +695,10 @@ pub fn app() -> Html {
         ViewMode::Compare => "Use the controls above to compare files across agents.",
     };
 
-    let user_email = auth_data.as_ref().and_then(|d| d.email.clone()).unwrap_or_default();
+    let user_email = auth_data
+        .as_ref()
+        .and_then(|d| d.email.clone())
+        .unwrap_or_default();
 
     html! {
         <div class="app-layout">

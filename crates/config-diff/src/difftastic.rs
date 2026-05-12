@@ -161,9 +161,7 @@ impl DiffEngine {
 
         match parsed {
             Some(output) => match format {
-                DiffFormat::Unified => {
-                    render_unified(&output, &prev_lines, &curr_lines, file_path)
-                }
+                DiffFormat::Unified => render_unified(&output, &prev_lines, &curr_lines, file_path),
                 DiffFormat::Context => render_context(
                     &output,
                     &prev_lines,

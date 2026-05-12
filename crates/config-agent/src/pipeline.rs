@@ -23,7 +23,9 @@ fn build_glob_set(patterns: &[String]) -> globset::GlobSet {
             }
         }
     }
-    builder.build().unwrap_or_else(|_| globset::GlobSet::empty())
+    builder
+        .build()
+        .unwrap_or_else(|_| globset::GlobSet::empty())
 }
 
 /// Scan all watch roots and snapshot existing files that don't yet have a baseline.
@@ -218,7 +220,11 @@ impl Pipeline {
                 let content = tokio::fs::read(path).await?;
                 // H11: cap file reads at 5 MiB
                 if content.len() > 5 * 1024 * 1024 {
-                    anyhow::bail!("file exceeds 5 MiB size cap: {} ({} bytes)", path, content.len());
+                    anyhow::bail!(
+                        "file exceeds 5 MiB size cap: {} ({} bytes)",
+                        path,
+                        content.len()
+                    );
                 }
                 let current_hash = config_snapshot::hash::compute_blake3(&content);
 

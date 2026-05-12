@@ -149,6 +149,7 @@ async fn list_with_no_filters_returns_all() {
         severity: None,
         since: None,
         until: None,
+        event_kind_exclude: vec![],
     };
     let results = ChangeEventsRepo::list(&pool, &filters, 50, 0)
         .await
@@ -205,6 +206,7 @@ async fn list_with_host_id_filter() {
         severity: None,
         since: None,
         until: None,
+        event_kind_exclude: vec![],
     };
     let results = ChangeEventsRepo::list(&pool, &filters, 50, 0)
         .await
@@ -250,6 +252,7 @@ async fn list_with_severity_filter() {
         severity: Some("warning".to_string()),
         since: None,
         until: None,
+        event_kind_exclude: vec![],
     };
     let results = ChangeEventsRepo::list(&pool, &filters, 50, 0)
         .await
@@ -291,6 +294,7 @@ async fn list_pagination_limit_offset() {
         severity: None,
         since: None,
         until: None,
+        event_kind_exclude: vec![],
     };
 
     let results_limit_2 = ChangeEventsRepo::list(&pool, &filters, 2, 0).await.unwrap();
@@ -331,6 +335,7 @@ async fn list_with_path_prefix_filter() {
         severity: None,
         since: None,
         until: None,
+        event_kind_exclude: vec![],
     };
     // This should not panic or error. Currently it will fail due to the bug.
     let _ = ChangeEventsRepo::list(&pool, &filters, 50, 0).await;

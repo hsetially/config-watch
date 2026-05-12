@@ -112,7 +112,10 @@ async fn file_metadata_handler(
     Json(body): Json<serde_json::Value>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     if let Err(status) = verify_agent_token(&state.agent_secret, &headers) {
-        return (status, Json(serde_json::json!({"error": "invalid agent token"})));
+        return (
+            status,
+            Json(serde_json::json!({"error": "invalid agent token"})),
+        );
     }
 
     let path = match body.get("path").and_then(|v| v.as_str()) {
@@ -153,7 +156,10 @@ async fn file_preview_handler(
     Json(body): Json<serde_json::Value>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     if let Err(status) = verify_agent_token(&state.agent_secret, &headers) {
-        return (status, Json(serde_json::json!({"error": "invalid agent token"})));
+        return (
+            status,
+            Json(serde_json::json!({"error": "invalid agent token"})),
+        );
     }
 
     let path = match body.get("path").and_then(|v| v.as_str()) {
@@ -220,7 +226,10 @@ async fn file_content_handler(
     Json(body): Json<serde_json::Value>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     if let Err(status) = verify_agent_token(&state.agent_secret, &headers) {
-        return (status, Json(serde_json::json!({"error": "invalid agent token"})));
+        return (
+            status,
+            Json(serde_json::json!({"error": "invalid agent token"})),
+        );
     }
 
     let path = match body.get("path").and_then(|v| v.as_str()) {

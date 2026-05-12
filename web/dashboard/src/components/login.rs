@@ -118,7 +118,11 @@ pub fn login(props: &LoginProps) -> Html {
                 }
                 AuthMode::SignUp => {
                     let name_val = (*name).clone();
-                    let name_opt = if name_val.is_empty() { None } else { Some(name_val.as_str()) };
+                    let name_opt = if name_val.is_empty() {
+                        None
+                    } else {
+                        Some(name_val.as_str())
+                    };
                     let loading_err2 = loading_err.clone();
                     let error_err2 = error_err.clone();
                     let on_approval_pending2 = on_approval_pending_clone.clone();
@@ -155,7 +159,11 @@ pub fn login(props: &LoginProps) -> Html {
 
     let is_sign_up = *mode == AuthMode::SignUp;
     let is_loading = *loading;
-    let title = if is_sign_up { "Create Account" } else { "Sign In" };
+    let title = if is_sign_up {
+        "Create Account"
+    } else {
+        "Sign In"
+    };
     let toggle_text = if is_sign_up {
         "Already have an account? Sign in"
     } else {

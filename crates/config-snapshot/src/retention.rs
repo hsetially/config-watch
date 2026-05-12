@@ -146,8 +146,8 @@ mod tests {
         let old_hash = crate::hash::compute_blake3(old_data);
         store.write_snapshot(&old_hash, old_data).await.unwrap();
         let old_path = base.join(&old_hash[..2]).join(&old_hash);
-        let one_hundred_days_ago = SystemTime::now()
-            - std::time::Duration::from_secs(100 * 24 * 3600);
+        let one_hundred_days_ago =
+            SystemTime::now() - std::time::Duration::from_secs(100 * 24 * 3600);
         filetime::set_file_mtime(
             old_path.as_std_path(),
             filetime::FileTime::from_system_time(one_hundred_days_ago),

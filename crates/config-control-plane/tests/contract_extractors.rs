@@ -22,10 +22,9 @@ fn make_state(secret: &str) -> AppState {
     .expect("create snapshot store");
 
     // Create a dummy auth state for testing
-    let auth_config = better_auth::AuthConfig::new(
-        "test-secret-key-that-is-at-least-32-characters-long",
-    )
-    .base_url("http://localhost:3000");
+    let auth_config =
+        better_auth::AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
+            .base_url("http://localhost:3000");
     let db = better_auth::adapters::SqlxAdapter::from_pool(
         sqlx::PgPool::connect_lazy("postgres://localhost/nonexistent").unwrap(),
     );
@@ -55,14 +54,13 @@ fn make_state(secret: &str) -> AppState {
         snapshot_store: std::sync::Arc::new(snapshot_store),
         repos_dir: "./data/repos".to_string(),
         github_token: None,
-        diff_service: std::sync::Arc::new(
-            config_control_plane::diff_service::DiffService::new(
-                config_diff::DiffConfig::default(),
-            ),
-        ),
+        diff_service: std::sync::Arc::new(config_control_plane::diff_service::DiffService::new(
+            config_diff::DiffConfig::default(),
+        )),
         auth: auth_state,
         admin_api_secret: None,
         require_approval: true,
+        tls_required: false,
         local_event_dedup: Arc::new(std::sync::Mutex::new(VecDeque::new())),
     }
 }

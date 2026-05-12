@@ -22,10 +22,9 @@ pub async fn setup_test_db() -> PgPool {
 }
 
 pub fn make_test_auth() -> AuthState {
-    let config = better_auth::AuthConfig::new(
-        "test-secret-key-that-is-at-least-32-characters-long",
-    )
-    .base_url("http://localhost:3000");
+    let config =
+        better_auth::AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
+            .base_url("http://localhost:3000");
     let db = better_auth::adapters::SqlxAdapter::from_pool(
         sqlx::PgPool::connect_lazy("postgres://localhost/nonexistent").unwrap(),
     );
@@ -64,7 +63,13 @@ pub fn make_app_state_with_broadcast_capacity(
         tmp.path().join("snapshots").to_str().unwrap(),
     ))
     .expect("create snapshot store");
-    AppState::with_broadcast_capacity(db, secret.to_string(), capacity, snapshot_store, make_test_auth())
+    AppState::with_broadcast_capacity(
+        db,
+        secret.to_string(),
+        capacity,
+        snapshot_store,
+        make_test_auth(),
+    )
 }
 
 #[allow(dead_code)]

@@ -63,9 +63,7 @@ impl ControlPlaneClient {
                 .https_only(true)
                 .min_tls_version(reqwest::tls::Version::TLS_1_2);
         }
-        let http = builder
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        let http = builder.build().unwrap_or_else(|_| reqwest::Client::new());
         Self {
             http,
             base_url: base_url.to_string(),

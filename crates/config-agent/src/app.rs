@@ -30,7 +30,7 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
 
     // Structured startup diagnostics
     for root in &cfg.watch_roots {
-        let mount_info = crate::watcher::detect_mount_info(&root.root_path.to_string());
+        let mount_info = crate::watcher::detect_mount_info(root.root_path.as_ref());
         tracing::info!(
             path = %mount_info.path,
             mount_point = ?mount_info.mount_point,
@@ -54,7 +54,9 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
         "storage directories"
     );
 
-    let snapshot_store = Arc::new(config_snapshot::store::SnapshotStore::new(&cfg.snapshot_dir)?);
+    let snapshot_store = Arc::new(config_snapshot::store::SnapshotStore::new(
+        &cfg.snapshot_dir,
+    )?);
     let spool = SpoolWriter::new(&cfg.spool_dir, cfg.max_spool_events, cfg.max_spool_bytes)?;
     let pipeline = Pipeline::new(cfg.clone(), host_id);
 
@@ -89,7 +91,10 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
     }
 
     // Publish initial snapshots for all tracked files
-    if let Err(e) = crate::pipeline::publish_initial_snapshots(&publisher, snapshot_store.as_ref(), host_id).await {
+    if let Err(e) =
+        crate::pipeline::publish_initial_snapshots(&publisher, snapshot_store.as_ref(), host_id)
+            .await
+    {
         tracing::warn!(error = %e, "initial snapshot publishing failed, continuing without initial state sync");
     }
 
@@ -181,7 +186,9 @@ pub async fn run(cfg: AgentConfig) -> anyhow::Result<()> {
         loop {
             interval.tick().await;
             let depth = heartbeat_spool.pending_count();
-            heartbeat_metrics.spool_depth.store(depth as u64, std::sync::atomic::Ordering::Relaxed);
+            heartbeat_metrics
+                .spool_depth
+                .store(depth as u64, std::sync::atomic::Ordering::Relaxed);
             if let Err(e) = heartbeat_publisher.heartbeat(depth, 0).await {
                 tracing::warn!(error = %e, "heartbeat failed");
             } else {

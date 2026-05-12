@@ -162,18 +162,17 @@ pub fn load_csrf_token() -> Option<String> {
         .and_then(|doc| js_sys::Reflect::get(&doc, &wasm_bindgen::JsValue::from_str("cookie")).ok())
         .and_then(|v| v.as_string());
     let cookie_str = cookie_str?;
-    cookie_str
-        .split(';')
-        .map(|s| s.trim())
-        .find_map(|part| {
-            let prefix = format!("{}=", CSRF_COOKIE_NAME);
-            part.strip_prefix(&prefix).map(|v| v.to_string())
-        })
+    cookie_str.split(';').map(|s| s.trim()).find_map(|part| {
+        let prefix = format!("{}=", CSRF_COOKIE_NAME);
+        part.strip_prefix(&prefix).map(|v| v.to_string())
+    })
 }
 
 /// Clear the CSRF cookie by setting it to an expired value.
 pub fn clear_csrf_cookie() {
-    let _ = js_sys::eval("document.cookie = 'config_watch_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'");
+    let _ = js_sys::eval(
+        "document.cookie = 'config_watch_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'",
+    );
 }
 
 pub fn save_github_token(token: &str) {

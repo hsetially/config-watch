@@ -61,8 +61,7 @@ fn default_auth_secret() -> String {
 }
 
 fn default_auth_base_url() -> String {
-    std::env::var("CONFIG_WATCH_AUTH_BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:8082".into())
+    std::env::var("CONFIG_WATCH_AUTH_BASE_URL").unwrap_or_else(|_| "http://localhost:8082".into())
 }
 
 fn default_trusted_origins() -> Vec<String> {

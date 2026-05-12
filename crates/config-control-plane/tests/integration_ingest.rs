@@ -40,9 +40,15 @@ async fn ingest_valid_event_returns_accepted() {
         &format!("ingest-key-{}", host_id),
     );
 
-    let outcome = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
-        .await
-        .unwrap();
+    let outcome = IngestService::ingest_change(
+        &pool,
+        &broadcast_tx,
+        &local_event_dedup,
+        &snapshot_store,
+        body,
+    )
+    .await
+    .unwrap();
 
     match outcome {
         IngestOutcome::Accepted { event_id } => {
@@ -68,16 +74,27 @@ async fn ingest_duplicate_idempotency_key_returns_duplicate() {
     let body = common::make_change_event_json(&host_id, "/etc/dupe.yaml", "modified", key_ref);
 
     // First ingest
-    let outcome1 =
-        IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body.clone())
-            .await
-            .unwrap();
+    let outcome1 = IngestService::ingest_change(
+        &pool,
+        &broadcast_tx,
+        &local_event_dedup,
+        &snapshot_store,
+        body.clone(),
+    )
+    .await
+    .unwrap();
     assert!(matches!(outcome1, IngestOutcome::Accepted { .. }));
 
     // Second ingest with same key
-    let outcome2 = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
-        .await
-        .unwrap();
+    let outcome2 = IngestService::ingest_change(
+        &pool,
+        &broadcast_tx,
+        &local_event_dedup,
+        &snapshot_store,
+        body,
+    )
+    .await
+    .unwrap();
     assert!(matches!(outcome2, IngestOutcome::Duplicate { .. }));
 
     // Verify both refer to same event_id
@@ -100,9 +117,15 @@ async fn ingest_wrong_schema_version_returns_rejected() {
         "event": { "idempotency_key": "test" }
     });
 
-    let outcome = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
-        .await
-        .unwrap();
+    let outcome = IngestService::ingest_change(
+        &pool,
+        &broadcast_tx,
+        &local_event_dedup,
+        &snapshot_store,
+        body,
+    )
+    .await
+    .unwrap();
     assert!(matches!(outcome, IngestOutcome::Rejected { .. }));
 }
 
@@ -117,9 +140,15 @@ async fn ingest_missing_event_returns_rejected() {
         "schema_version": "1.0"
     });
 
-    let outcome = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
-        .await
-        .unwrap();
+    let outcome = IngestService::ingest_change(
+        &pool,
+        &broadcast_tx,
+        &local_event_dedup,
+        &snapshot_store,
+        body,
+    )
+    .await
+    .unwrap();
     match outcome {
         IngestOutcome::Rejected { reason } => {
             assert!(reason.contains("missing event"));
@@ -144,9 +173,15 @@ async fn ingest_missing_idempotency_key_returns_rejected() {
         }
     });
 
-    let outcome = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
-        .await
-        .unwrap();
+    let outcome = IngestService::ingest_change(
+        &pool,
+        &broadcast_tx,
+        &local_event_dedup,
+        &snapshot_store,
+        body,
+    )
+    .await
+    .unwrap();
     match outcome {
         IngestOutcome::Rejected { reason } => {
             assert!(reason.contains("missing idempotency_key"));
@@ -174,9 +209,15 @@ async fn ingest_broadcasts_realtime_message() {
         &format!("broadcast-key-{}", host_id),
     );
 
-    let _ = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
-        .await
-        .unwrap();
+    let _ = IngestService::ingest_change(
+        &pool,
+        &broadcast_tx,
+        &local_event_dedup,
+        &snapshot_store,
+        body,
+    )
+    .await
+    .unwrap();
 
     // Should receive a broadcast message
     let msg = broadcast_rx.try_recv().unwrap();
@@ -211,9 +252,15 @@ async fn ingest_touches_host_heartbeat() {
         &format!("hb-key-{}", host_id),
     );
 
-    let _ = IngestService::ingest_change(&pool, &broadcast_tx, &local_event_dedup, &snapshot_store, body)
-        .await
-        .unwrap();
+    let _ = IngestService::ingest_change(
+        &pool,
+        &broadcast_tx,
+        &local_event_dedup,
+        &snapshot_store,
+        body,
+    )
+    .await
+    .unwrap();
 
     // Heartbeat should be updated
     let after: Option<chrono::DateTime<chrono::Utc>> =

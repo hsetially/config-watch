@@ -52,7 +52,9 @@ async fn hash_password(password: &str) -> String {
     let encoded_val = js_sys::Function::from(encode_fn)
         .call1(&encoder, &wasm_bindgen::JsValue::from_str(password))
         .expect("TextEncoder.encode failed");
-    let encoded: &js_sys::Object = encoded_val.dyn_ref().expect("encoded result is not an Object");
+    let encoded: &js_sys::Object = encoded_val
+        .dyn_ref()
+        .expect("encoded result is not an Object");
 
     let promise = match subtle.digest_with_str_and_buffer_source("SHA-256", encoded) {
         Ok(p) => p,
@@ -111,9 +113,12 @@ pub fn sign_in(
                                 if err.error.as_deref() == Some("approval_pending") {
                                     on_approval_pending.emit(());
                                 } else if err.error.as_deref() == Some("insufficient_role") {
-                                    on_error.emit("Account does not have required role".to_string());
+                                    on_error
+                                        .emit("Account does not have required role".to_string());
                                 } else {
-                                    let msg = err.message.unwrap_or_else(|| "Account suspended".to_string());
+                                    let msg = err
+                                        .message
+                                        .unwrap_or_else(|| "Account suspended".to_string());
                                     on_error.emit(msg);
                                 }
                             }
@@ -132,11 +137,15 @@ pub fn sign_in(
                                 storage::save_auth_data(&data);
                                 on_result.emit(data);
                             }
-                            Err(e) => on_error.emit(format!("Failed to parse sign-in response: {}", e)),
+                            Err(e) => {
+                                on_error.emit(format!("Failed to parse sign-in response: {}", e))
+                            }
                         }
                     } else {
                         let msg = match resp.json::<AuthErrorResponse>().await {
-                            Ok(err) => err.message.unwrap_or_else(|| format!("Sign-in failed (HTTP {})", status)),
+                            Ok(err) => err
+                                .message
+                                .unwrap_or_else(|| format!("Sign-in failed (HTTP {})", status)),
                             Err(_) => format!("Sign-in failed (HTTP {})", status),
                         };
                         on_error.emit(msg);
@@ -152,7 +161,7 @@ pub fn sign_in(
 /// Sign up with email/password. On success:
 /// - Saves user identity and calls `on_result` (session is cookie-based).
 /// - If approval required (403), calls `on_approval_pending`.
-/// On failure, calls `on_error`.
+///   On failure, calls `on_error`.
 pub fn sign_up(
     _base_url: &str,
     email: &str,
@@ -195,9 +204,12 @@ pub fn sign_up(
                                 if err.error.as_deref() == Some("approval_pending") {
                                     on_approval_pending.emit(());
                                 } else if err.error.as_deref() == Some("insufficient_role") {
-                                    on_error.emit("Account does not have required role".to_string());
+                                    on_error
+                                        .emit("Account does not have required role".to_string());
                                 } else {
-                                    let msg = err.message.unwrap_or_else(|| "Account suspended".to_string());
+                                    let msg = err
+                                        .message
+                                        .unwrap_or_else(|| "Account suspended".to_string());
                                     on_error.emit(msg);
                                 }
                             }
@@ -213,11 +225,15 @@ pub fn sign_up(
                                 storage::save_auth_data(&data);
                                 on_result.emit(data);
                             }
-                            Err(e) => on_error.emit(format!("Failed to parse sign-up response: {}", e)),
+                            Err(e) => {
+                                on_error.emit(format!("Failed to parse sign-up response: {}", e))
+                            }
                         }
                     } else {
                         let msg = match resp.json::<AuthErrorResponse>().await {
-                            Ok(err) => err.message.unwrap_or_else(|| format!("Sign-up failed (HTTP {})", status)),
+                            Ok(err) => err
+                                .message
+                                .unwrap_or_else(|| format!("Sign-up failed (HTTP {})", status)),
                             Err(_) => format!("Sign-up failed (HTTP {})", status),
                         };
                         on_error.emit(msg);
@@ -239,8 +255,8 @@ pub fn sign_out(on_complete: yew::Callback<()>) {
     let on_complete = on_complete.clone();
 
     spawn_local(async move {
-        let mut req = gloo_net::http::Request::post(&url)
-            .credentials(web_sys::RequestCredentials::Include);
+        let mut req =
+            gloo_net::http::Request::post(&url).credentials(web_sys::RequestCredentials::Include);
         if let Some(csrf) = csrf_token {
             req = req.header("x-csrf-token", &csrf);
         }

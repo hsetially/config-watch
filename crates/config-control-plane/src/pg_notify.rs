@@ -114,13 +114,15 @@ pub async fn start_pg_listener(
 }
 
 /// Fetch a `ChangeEventRow` by `event_id` and its host's `environment`.
-async fn fetch_event(pool: &PgPool, event_id: Uuid) -> anyhow::Result<Option<(ChangeEventRow, String)>> {
-    let row = sqlx::query_as::<_, ChangeEventRow>(
-        "SELECT * FROM change_events WHERE event_id = $1",
-    )
-    .bind(event_id)
-    .fetch_optional(pool)
-    .await?;
+async fn fetch_event(
+    pool: &PgPool,
+    event_id: Uuid,
+) -> anyhow::Result<Option<(ChangeEventRow, String)>> {
+    let row =
+        sqlx::query_as::<_, ChangeEventRow>("SELECT * FROM change_events WHERE event_id = $1")
+            .bind(event_id)
+            .fetch_optional(pool)
+            .await?;
 
     match row {
         Some(row) => {

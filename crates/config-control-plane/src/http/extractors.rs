@@ -3,10 +3,10 @@ use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use base64::Engine;
-use better_auth::{AuthSession, AuthUser, UserOps};
 use better_auth::types_mod::ApiKeyOps;
-use sha2::{Digest, Sha256};
+use better_auth::{AuthSession, AuthUser, UserOps};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::services::AppState;
@@ -47,7 +47,9 @@ impl FromRequestParts<AppState> for AgentAuth {
             .unwrap_or_default();
 
         if token.is_empty() {
-            return Err((StatusCode::UNAUTHORIZED, "missing agent token or API key").into_response());
+            return Err(
+                (StatusCode::UNAUTHORIZED, "missing agent token or API key").into_response()
+            );
         }
 
         match config_auth::tokens::AgentCredential::verify(&state.secret, &token) {
@@ -89,7 +91,9 @@ async fn validate_api_key(key: &str, state: &AppState) -> Result<AgentAuth, Resp
                 if !expires.is_empty() {
                     if let Ok(expiry) = expires.parse::<chrono::DateTime<chrono::Utc>>() {
                         if expiry < chrono::Utc::now() {
-                            return Err((StatusCode::UNAUTHORIZED, "API key has expired").into_response());
+                            return Err(
+                                (StatusCode::UNAUTHORIZED, "API key has expired").into_response()
+                            );
                         }
                     }
                 }
@@ -131,9 +135,15 @@ impl FromRequestParts<AppState> for AuthenticatedUser {
             .await
             .map_err(|e| {
                 tracing::warn!(error = %e, "session validation error");
-                (StatusCode::INTERNAL_SERVER_ERROR, "session validation failed").into_response()
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "session validation failed",
+                )
+                    .into_response()
             })?
-            .ok_or_else(|| (StatusCode::UNAUTHORIZED, "invalid or expired session").into_response())?;
+            .ok_or_else(|| {
+                (StatusCode::UNAUTHORIZED, "invalid or expired session").into_response()
+            })?;
 
         let user = state
             .auth
@@ -156,7 +166,9 @@ impl FromRequestParts<AppState> for AuthenticatedUser {
             let message = if role.as_deref() == Some("pending_approval") {
                 "Account awaiting admin approval".to_string()
             } else {
-                user.ban_reason().unwrap_or("Account has been banned").to_string()
+                user.ban_reason()
+                    .unwrap_or("Account has been banned")
+                    .to_string()
             };
             let body = serde_json::json!({
                 "error": error_type,
@@ -165,7 +177,9 @@ impl FromRequestParts<AppState> for AuthenticatedUser {
             return Err((
                 StatusCode::FORBIDDEN,
                 [(axum::http::header::CONTENT_TYPE, "application/json")],
-                serde_json::to_string(&body).unwrap_or_else(|_| r#"{"error":"banned","message":"Account suspended"}"#.to_string()),
+                serde_json::to_string(&body).unwrap_or_else(|_| {
+                    r#"{"error":"banned","message":"Account suspended"}"#.to_string()
+                }),
             )
                 .into_response());
         }
@@ -180,7 +194,9 @@ impl FromRequestParts<AppState> for AuthenticatedUser {
             return Err((
                 StatusCode::FORBIDDEN,
                 [(axum::http::header::CONTENT_TYPE, "application/json")],
-                serde_json::to_string(&body).unwrap_or_else(|_| r#"{"error":"insufficient_role","message":"Access denied"}"#.to_string()),
+                serde_json::to_string(&body).unwrap_or_else(|_| {
+                    r#"{"error":"insufficient_role","message":"Access denied"}"#.to_string()
+                }),
             )
                 .into_response());
         }
@@ -283,14 +299,10 @@ impl FromRequestParts<AppState> for CsrfProtected {
             .headers
             .get("x-csrf-token")
             .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| {
-                (StatusCode::FORBIDDEN, "missing CSRF token").into_response()
-            })?;
+            .ok_or_else(|| (StatusCode::FORBIDDEN, "missing CSRF token").into_response())?;
 
         let cookie_token = extract_cookie_value(parts, CSRF_COOKIE_NAME)
-            .ok_or_else(|| {
-                (StatusCode::FORBIDDEN, "missing CSRF cookie").into_response()
-            })?;
+            .ok_or_else(|| (StatusCode::FORBIDDEN, "missing CSRF cookie").into_response())?;
 
         if !constant_time_eq::constant_time_eq(header_token.as_bytes(), cookie_token.as_bytes()) {
             return Err((StatusCode::FORBIDDEN, "CSRF token mismatch").into_response());
@@ -360,9 +372,8 @@ impl FromRequestParts<AppState> for WsAuthenticatedUser {
                         }
                         Err(e) => {
                             tracing::warn!(error = %e, "WS ticket verification failed");
-                            return Err(
-                                (StatusCode::UNAUTHORIZED, "invalid or expired ticket").into_response()
-                            );
+                            return Err((StatusCode::UNAUTHORIZED, "invalid or expired ticket")
+                                .into_response());
                         }
                     }
                 }
@@ -373,7 +384,7 @@ impl FromRequestParts<AppState> for WsAuthenticatedUser {
         if let Some(auth_header) = parts.headers.get("authorization") {
             if let Ok(auth_str) = auth_header.to_str() {
                 if let Some(token) = auth_str.strip_prefix("Bearer ") {
-                    if let Some(user) = validate_session(&token, state, cookie_name).await? {
+                    if let Some(user) = validate_session(token, state, cookie_name).await? {
                         return Ok(WsAuthenticatedUser(user));
                     }
                 }
@@ -418,17 +429,16 @@ async fn validate_session(
     state: &AppState,
     _cookie_name: &str,
 ) -> Result<Option<AuthenticatedUser>, Response> {
-    let session = match state
-        .auth
-        .session_manager()
-        .get_session(token)
-        .await
-    {
+    let session = match state.auth.session_manager().get_session(token).await {
         Ok(Some(s)) => s,
         Ok(None) => return Ok(None),
         Err(e) => {
             tracing::warn!(error = %e, "session validation error");
-            return Err((StatusCode::INTERNAL_SERVER_ERROR, "session validation failed").into_response());
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "session validation failed",
+            )
+                .into_response());
         }
     };
 
@@ -483,7 +493,8 @@ impl FromRequestParts<AppState> for AdminUser {
             return Err((
                 StatusCode::FORBIDDEN,
                 [(axum::http::header::CONTENT_TYPE, "application/json")],
-                serde_json::json!({"error": "forbidden", "message": "Admin role required"}).to_string(),
+                serde_json::json!({"error": "forbidden", "message": "Admin role required"})
+                    .to_string(),
             )
                 .into_response());
         }

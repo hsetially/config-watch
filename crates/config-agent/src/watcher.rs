@@ -182,7 +182,9 @@ impl FileWatcher {
                 // "auto" — detect from mount info
                 let any_nfs = roots.iter().any(|r| is_nfs_mount(r));
                 if any_nfs {
-                    tracing::info!("NFS mount detected — using PollWatcher for reliable change detection");
+                    tracing::info!(
+                        "NFS mount detected — using PollWatcher for reliable change detection"
+                    );
                     WatchBackend::Poll
                 } else {
                     tracing::info!("Using inotify (RecommendedWatcher) for local filesystem");
@@ -249,7 +251,8 @@ impl FileWatcher {
                                 continue;
                             }
                         };
-                        if let Err(e) = watcher.watch(&canonical, notify::RecursiveMode::Recursive) {
+                        if let Err(e) = watcher.watch(&canonical, notify::RecursiveMode::Recursive)
+                        {
                             tracing::error!(path = %canonical.display(), error = %e, "failed to watch root");
                         } else {
                             tracing::info!(path = %canonical.display(), "watching root (poll mode)");

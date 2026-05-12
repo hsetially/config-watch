@@ -12,9 +12,17 @@ use crate::watcher::{detect_mount_info, WatchBackend};
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum CheckResult {
-    Pass { message: String },
-    Warn { message: String },
-    Fail { message: String, #[serde(skip_serializing_if = "Option::is_none")] detail: Option<String> },
+    Pass {
+        message: String,
+    },
+    Warn {
+        message: String,
+    },
+    Fail {
+        message: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        detail: Option<String>,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -44,7 +52,7 @@ fn check_watch_mode(cfg: &AgentConfig) -> DiagnosticCheck {
             let any_nfs = cfg
                 .watch_roots
                 .iter()
-                .any(|r| detect_mount_info(&r.root_path.to_string()).is_nfs);
+                .any(|r| detect_mount_info(r.root_path.as_ref()).is_nfs);
             if any_nfs {
                 (WatchBackend::Poll, "auto-detected NFS mount".to_string())
             } else {
@@ -58,7 +66,7 @@ fn check_watch_mode(cfg: &AgentConfig) -> DiagnosticCheck {
         let any_nfs = cfg
             .watch_roots
             .iter()
-            .any(|r| detect_mount_info(&r.root_path.to_string()).is_nfs);
+            .any(|r| detect_mount_info(r.root_path.as_ref()).is_nfs);
         if any_nfs {
             CheckResult::Warn {
                 message: format!(
@@ -122,7 +130,7 @@ fn check_mount_types(cfg: &AgentConfig) -> DiagnosticCheck {
     let mut details = Vec::new();
 
     for root in &cfg.watch_roots {
-        let info = detect_mount_info(&root.root_path.to_string());
+        let info = detect_mount_info(root.root_path.as_ref());
         details.push(format!(
             "{}: mount={} fs={} is_nfs={}",
             info.path,
@@ -174,7 +182,10 @@ fn check_control_plane_reachable(cfg: &AgentConfig) -> DiagnosticCheck {
     let url = &cfg.control_plane_base_url;
 
     // Try to parse the URL and extract host:port for a TCP connect check.
-    let result = match url.strip_prefix("http://").or_else(|| url.strip_prefix("https://")) {
+    let result = match url
+        .strip_prefix("http://")
+        .or_else(|| url.strip_prefix("https://"))
+    {
         Some(host_port) => {
             let (host, port) = if host_port.contains('/') {
                 let hp = host_port.split('/').next().unwrap_or(host_port);
@@ -185,7 +196,9 @@ fn check_control_plane_reachable(cfg: &AgentConfig) -> DiagnosticCheck {
 
             match std::net::TcpStream::connect_timeout(
                 &std::net::SocketAddr::new(
-                    host.parse().unwrap_or_else(|_| std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))),
+                    host.parse().unwrap_or_else(|_| {
+                        std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
+                    }),
                     port,
                 ),
                 std::time::Duration::from_secs(5),
@@ -291,20 +304,20 @@ fn check_tls_config(cfg: &AgentConfig) -> DiagnosticCheck {
 // ---------------------------------------------------------------------------
 
 pub fn run(cfg: &AgentConfig, format: &str) -> anyhow::Result<()> {
-    let mut checks = Vec::new();
-
-    checks.push(check_watch_mode(cfg));
-    checks.push(check_watch_roots_accessible(cfg));
-    checks.push(check_mount_types(cfg));
-    // yaml_files_found uses a simplified count; skip the glob logic
-    // and just check if roots have any yaml at top level
-    checks.push(check_yaml_files_found_simple(cfg));
-    checks.push(check_dir_writable("snapshot", &cfg.snapshot_dir));
-    checks.push(check_dir_writable("spool", &cfg.spool_dir));
-    checks.push(check_control_plane_reachable(cfg));
-    checks.push(check_difftastic_available());
-    checks.push(check_config_validity(cfg));
-    checks.push(check_tls_config(cfg));
+    let checks = vec![
+        check_watch_mode(cfg),
+        check_watch_roots_accessible(cfg),
+        check_mount_types(cfg),
+        // yaml_files_found uses a simplified count; skip the glob logic
+        // and just check if roots have any yaml at top level
+        check_yaml_files_found_simple(cfg),
+        check_dir_writable("snapshot", &cfg.snapshot_dir),
+        check_dir_writable("spool", &cfg.spool_dir),
+        check_control_plane_reachable(cfg),
+        check_difftastic_available(),
+        check_config_validity(cfg),
+        check_tls_config(cfg),
+    ];
 
     let report = DiagnosticReport {
         agent_id: cfg.agent_id.clone(),
@@ -402,9 +415,21 @@ fn print_text_report(report: &DiagnosticReport) {
     }
 
     // Summary
-    let pass_count = report.checks.iter().filter(|c| matches!(c.result, CheckResult::Pass { .. })).count();
-    let warn_count = report.checks.iter().filter(|c| matches!(c.result, CheckResult::Warn { .. })).count();
-    let fail_count = report.checks.iter().filter(|c| matches!(c.result, CheckResult::Fail { .. })).count();
+    let pass_count = report
+        .checks
+        .iter()
+        .filter(|c| matches!(c.result, CheckResult::Pass { .. }))
+        .count();
+    let warn_count = report
+        .checks
+        .iter()
+        .filter(|c| matches!(c.result, CheckResult::Warn { .. }))
+        .count();
+    let fail_count = report
+        .checks
+        .iter()
+        .filter(|c| matches!(c.result, CheckResult::Fail { .. }))
+        .count();
     println!();
     println!(
         "Results: {} passed, {} warnings, {} failed",

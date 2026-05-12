@@ -18,9 +18,7 @@ pub fn api_base_url() -> String {
                 .query_selector("meta[name=\"api-base-url\"]")
                 .ok()
                 .flatten()
-                .expect(
-                    "required <meta name=\"api-base-url\"> tag missing from index.html",
-                );
+                .expect("required <meta name=\"api-base-url\"> tag missing from index.html");
             let content = meta
                 .get_attribute("content")
                 .filter(|s| !s.is_empty())
@@ -51,7 +49,10 @@ pub fn ws_url(path: &str, query: &str) -> String {
     } else if let Some(rest) = base.strip_prefix("http://") {
         format!("ws://{}", rest)
     } else {
-        panic!("api-base-url must start with http:// or https://: got {}", base);
+        panic!(
+            "api-base-url must start with http:// or https://: got {}",
+            base
+        );
     };
     if query.is_empty() {
         format!("{}{}", ws_base, path)

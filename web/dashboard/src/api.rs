@@ -2,11 +2,11 @@ use serde::Deserialize;
 use wasm_bindgen_futures::spawn_local;
 use yew::Callback;
 
-use crate::url;
 use crate::models::{
     ChangeEventRow, ChangesPage, FileContentResponse, GitHubFileContentResponse, HostInfo,
     WatchRootInfo, WorkflowCreateRequest, WorkflowCreateResponse, WorkflowStatusResponse,
 };
+use crate::url;
 
 /// Check if a response is 401 Unauthorized or 403 Forbidden and emit logout if so.
 fn check_unauthorized(status: u16, on_unauthorized: &Option<Callback<()>>) {
@@ -29,8 +29,8 @@ pub fn fetch_hosts(
     let on_unauthorized = on_unauthorized.clone();
 
     spawn_local(async move {
-        let req = gloo_net::http::Request::get(&url)
-            .credentials(web_sys::RequestCredentials::Include);
+        let req =
+            gloo_net::http::Request::get(&url).credentials(web_sys::RequestCredentials::Include);
         match req.send().await {
             Ok(resp) => {
                 let status = resp.status();
@@ -46,10 +46,7 @@ pub fn fetch_hosts(
                         }
                     }
                 } else {
-                    gloo::console::warn!(
-                        "Hosts request failed with status:",
-                        &status.to_string()
-                    );
+                    gloo::console::warn!("Hosts request failed with status:", &status.to_string());
                     on_result.emit(Vec::new());
                 }
             }
@@ -72,8 +69,8 @@ pub fn fetch_watch_roots(
     let on_unauthorized = on_unauthorized.clone();
 
     spawn_local(async move {
-        let req = gloo_net::http::Request::get(&url)
-            .credentials(web_sys::RequestCredentials::Include);
+        let req =
+            gloo_net::http::Request::get(&url).credentials(web_sys::RequestCredentials::Include);
         match req.send().await {
             Ok(resp) => {
                 let status = resp.status();
@@ -118,8 +115,8 @@ pub fn fetch_changes(
     let on_unauthorized = on_unauthorized.clone();
 
     spawn_local(async move {
-        let req = gloo_net::http::Request::get(&url)
-            .credentials(web_sys::RequestCredentials::Include);
+        let req =
+            gloo_net::http::Request::get(&url).credentials(web_sys::RequestCredentials::Include);
         match req.send().await {
             Ok(resp) => {
                 let status = resp.status();
@@ -202,8 +199,8 @@ pub fn fetch_change_diff(
     };
     let on_result = on_result.clone();
     spawn_local(async move {
-        let req = gloo_net::http::Request::get(&url)
-            .credentials(web_sys::RequestCredentials::Include);
+        let req =
+            gloo_net::http::Request::get(&url).credentials(web_sys::RequestCredentials::Include);
         match req.send().await {
             Ok(resp) => {
                 let status = resp.status();
@@ -241,8 +238,8 @@ pub fn fetch_event_detail(
     let on_unauthorized = on_unauthorized.clone();
 
     spawn_local(async move {
-        let req = gloo_net::http::Request::get(&url)
-            .credentials(web_sys::RequestCredentials::Include);
+        let req =
+            gloo_net::http::Request::get(&url).credentials(web_sys::RequestCredentials::Include);
         match req.send().await {
             Ok(resp) => {
                 let status = resp.status();
@@ -332,6 +329,7 @@ pub fn create_workflow(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn fetch_file_content(
     _base_url: &str,
     host_id: &str,
@@ -401,8 +399,8 @@ pub fn get_workflow(
     let on_unauthorized = on_unauthorized.clone();
 
     spawn_local(async move {
-        let req = gloo_net::http::Request::get(&url)
-            .credentials(web_sys::RequestCredentials::Include);
+        let req =
+            gloo_net::http::Request::get(&url).credentials(web_sys::RequestCredentials::Include);
         match req.send().await {
             Ok(resp) => {
                 check_unauthorized(resp.status(), &on_unauthorized);
@@ -469,4 +467,3 @@ pub fn fetch_github_file_content(
         }
     });
 }
-

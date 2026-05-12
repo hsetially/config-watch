@@ -17,7 +17,10 @@ use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::http::extractors::{AgentAuth, AuthenticatedUser, ChangeFilters, CorrelationId, CsrfProtected, Pagination, WsAuthenticatedUser};
+use crate::http::extractors::{
+    AgentAuth, AuthenticatedUser, ChangeFilters, CorrelationId, CsrfProtected, Pagination,
+    WsAuthenticatedUser,
+};
 use crate::realtime::SubscriptionFilter;
 use crate::services::{AppState, AuthState};
 
@@ -93,7 +96,11 @@ async fn auth_proxy_handler(
     };
 
     // Strip /auth prefix from path
-    let path = parts.uri.path().strip_prefix("/auth").unwrap_or(parts.uri.path());
+    let path = parts
+        .uri
+        .path()
+        .strip_prefix("/auth")
+        .unwrap_or(parts.uri.path());
 
     // Capture request metadata for login tracking
     let request_ip = parts
@@ -101,7 +108,13 @@ async fn auth_proxy_handler(
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
-        .or_else(|| parts.headers.get("x-real-ip").and_then(|v| v.to_str().ok()).map(|s| s.to_string()));
+        .or_else(|| {
+            parts
+                .headers
+                .get("x-real-ip")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string())
+        });
     let request_ua = parts
         .headers
         .get("user-agent")
@@ -121,7 +134,10 @@ async fn auth_proxy_handler(
     let is_signin = method == HttpMethod::Post && path == "/sign-in/email";
 
     // For non-GET mutating requests, require Origin to be in trusted_origins.
-    let is_mutating = matches!(method, HttpMethod::Post | HttpMethod::Put | HttpMethod::Delete | HttpMethod::Patch);
+    let is_mutating = matches!(
+        method,
+        HttpMethod::Post | HttpMethod::Put | HttpMethod::Delete | HttpMethod::Patch
+    );
     if is_mutating {
         if let Some(ref origin) = request_origin {
             if !trusted_origins.iter().any(|t| t == origin) {
@@ -139,7 +155,8 @@ async fn auth_proxy_handler(
             return (
                 StatusCode::FORBIDDEN,
                 [(axum::http::header::CONTENT_TYPE, "application/json")],
-                serde_json::json!({"error": "missing_origin", "message": "Origin header required"}).to_string(),
+                serde_json::json!({"error": "missing_origin", "message": "Origin header required"})
+                    .to_string(),
             )
                 .into_response();
         }
@@ -161,7 +178,11 @@ async fn auth_proxy_handler(
     }
 
     // Read body
-    let max_bytes = auth.body_limit_config().enabled.then_some(auth.body_limit_config().max_bytes).unwrap_or(1024 * 1024);
+    let max_bytes = if auth.body_limit_config().enabled {
+        auth.body_limit_config().max_bytes
+    } else {
+        1024 * 1024
+    };
     let body_bytes = match axum::body::to_bytes(body, max_bytes).await {
         Ok(bytes) => {
             if bytes.is_empty() {
@@ -173,7 +194,8 @@ async fn auth_proxy_handler(
         Err(_) => return (StatusCode::BAD_REQUEST, "Failed to read request body").into_response(),
     };
 
-    let auth_req = better_auth::AuthRequest::from_parts(method, path.to_string(), headers, body_bytes, query);
+    let auth_req =
+        better_auth::AuthRequest::from_parts(method, path.to_string(), headers, body_bytes, query);
 
     match auth.handle_request(auth_req).await {
         Ok(auth_response) => {
@@ -185,8 +207,14 @@ async fn auth_proxy_handler(
             // Return 403 so the frontend shows the "Account Pending Approval" screen
             // instead of letting the 200 response through and showing a broken dashboard.
             if is_signup && state.require_approval && status == StatusCode::OK {
-                if let Ok(body_json) = serde_json::from_slice::<serde_json::Value>(&auth_response.body) {
-                    if let Some(user_id) = body_json.get("user").and_then(|u| u.get("id")).and_then(|id| id.as_str()) {
+                if let Ok(body_json) =
+                    serde_json::from_slice::<serde_json::Value>(&auth_response.body)
+                {
+                    if let Some(user_id) = body_json
+                        .get("user")
+                        .and_then(|u| u.get("id"))
+                        .and_then(|id| id.as_str())
+                    {
                         let pool = state.db.pool();
                         let user_id_owned = user_id.to_string();
                         // Mark user as banned with pending_approval role
@@ -227,8 +255,14 @@ async fn auth_proxy_handler(
 
             // Post-process successful sign-in: check banned/role, track login info
             if is_signin && status == StatusCode::OK {
-                if let Ok(body_json) = serde_json::from_slice::<serde_json::Value>(&auth_response.body) {
-                    if let Some(user_id) = body_json.get("user").and_then(|u| u.get("id")).and_then(|id| id.as_str()) {
+                if let Ok(body_json) =
+                    serde_json::from_slice::<serde_json::Value>(&auth_response.body)
+                {
+                    if let Some(user_id) = body_json
+                        .get("user")
+                        .and_then(|u| u.get("id"))
+                        .and_then(|id| id.as_str())
+                    {
                         let pool = state.db.pool();
                         let user_id_owned = user_id.to_string();
 
@@ -260,7 +294,8 @@ async fn auth_proxy_handler(
                                     .await;
 
                                 tracing::info!(user_id = %user_id_owned, role = ?role, "sign-in blocked: user is banned");
-                                let body = serde_json::json!({"error": error_type, "message": message});
+                                let body =
+                                    serde_json::json!({"error": error_type, "message": message});
                                 return (
                                     StatusCode::FORBIDDEN,
                                     [(axum::http::header::CONTENT_TYPE, "application/json")],
@@ -330,7 +365,9 @@ async fn auth_proxy_handler(
             let should_strip_token = is_success && (is_signin || is_signup);
 
             let response_body = if should_strip_token {
-                if let Ok(mut body_json) = serde_json::from_slice::<serde_json::Value>(&auth_response.body) {
+                if let Ok(mut body_json) =
+                    serde_json::from_slice::<serde_json::Value>(&auth_response.body)
+                {
                     if let Some(obj) = body_json.as_object_mut() {
                         obj.remove("token");
                     }
@@ -345,7 +382,10 @@ async fn auth_proxy_handler(
             if should_inject_csrf {
                 let csrf_token = Uuid::new_v4().to_string();
                 let csrf_cookie = if state.tls_required {
-                    format!("config_watch_csrf={}; Secure; SameSite=Strict; Path=/", csrf_token)
+                    format!(
+                        "config_watch_csrf={}; Secure; SameSite=Strict; Path=/",
+                        csrf_token
+                    )
                 } else {
                     format!("config_watch_csrf={}; SameSite=Strict; Path=/", csrf_token)
                 };
@@ -482,7 +522,10 @@ async fn heartbeat_handler(
     // H10 fix: reject if body.host_id doesn't match the authenticated identity
     if let Some(id) = host_id {
         if id.to_string() != auth.host_id {
-            let msg = format!("host_id mismatch: authenticated as {} but requested {}", auth.host_id, id);
+            let msg = format!(
+                "host_id mismatch: authenticated as {} but requested {}",
+                auth.host_id, id
+            );
             return (
                 StatusCode::FORBIDDEN,
                 Json(serde_json::json!({"error": msg})),
@@ -522,7 +565,8 @@ async fn agent_tunnel_handler(
             return (
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({"error": "invalid host_id in authentication"})),
-            ).into_response();
+            )
+                .into_response();
         }
     };
     ws.on_upgrade(move |socket| crate::tunnel::handle_agent_tunnel(socket, state, host_id))
@@ -829,27 +873,25 @@ async fn change_diff_handler(
         None => (None, None),
     };
 
-    let host = match config_storage::repositories::hosts::HostsRepo::get(
-        state.db.pool(),
-        event.host_id,
-    )
-    .await
-    {
-        Ok(Some(h)) => h,
-        Ok(None) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(serde_json::json!({"error": "host not found"})),
-            )
-        }
-        Err(e) => {
-            tracing::error!(error = %e, "lookup host failed");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "internal error"})),
-            );
-        }
-    };
+    let host =
+        match config_storage::repositories::hosts::HostsRepo::get(state.db.pool(), event.host_id)
+            .await
+        {
+            Ok(Some(h)) => h,
+            Ok(None) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({"error": "host not found"})),
+                )
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "lookup host failed");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"error": "internal error"})),
+                );
+            }
+        };
     if host.status == "offline" {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -861,18 +903,10 @@ async fn change_diff_handler(
 
     // Fetch both revisions in parallel, trying tunnel first then falling back
     // to direct HTTP. Each may independently come back as SnapshotGone.
-    let prev_fut = fetch_snapshot_via_tunnel_or_http(
-        &state,
-        host_id,
-        &path,
-        prev_hash_opt.as_deref(),
-    );
-    let curr_fut = fetch_snapshot_via_tunnel_or_http(
-        &state,
-        host_id,
-        &path,
-        curr_hash_opt.as_deref(),
-    );
+    let prev_fut =
+        fetch_snapshot_via_tunnel_or_http(&state, host_id, &path, prev_hash_opt.as_deref());
+    let curr_fut =
+        fetch_snapshot_via_tunnel_or_http(&state, host_id, &path, curr_hash_opt.as_deref());
     let (prev_res, curr_res) = tokio::join!(prev_fut, curr_fut);
 
     let (previous, prev_status) = unwrap_snapshot_fetch(prev_res, "previous");
@@ -883,9 +917,7 @@ async fn change_diff_handler(
     {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(
-                serde_json::json!({"error": "agent unreachable", "host_id": event.host_id}),
-            ),
+            Json(serde_json::json!({"error": "agent unreachable", "host_id": event.host_id})),
         );
     }
 
@@ -1079,7 +1111,7 @@ async fn fetch_snapshot_via_tunnel_or_http(
                                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                 let detail = response.error.unwrap_or_default();
                                 return Err(
-                                    config_transport::agent_query::SnapshotGone(detail).into(),
+                                    config_transport::agent_query::SnapshotGone(detail).into()
                                 );
                             }
                             "denied" => {
@@ -1231,10 +1263,7 @@ async fn handle_ws(socket: WebSocket, state: AppState, filter: SubscriptionFilte
 /// that the dashboard can use in a `?ticket=` query parameter for WS authentication,
 /// avoiding the need to send the session token in the URL (which leaks in logs).
 /// The ticket is signed with the control-plane secret and works across pods.
-async fn ws_ticket_handler(
-    State(state): State<AppState>,
-    user: CsrfProtected,
-) -> HandlerResponse {
+async fn ws_ticket_handler(State(state): State<AppState>, user: CsrfProtected) -> HandlerResponse {
     let ticket = crate::ws_ticket::generate_ticket(&user.0.user_id, &state.secret);
     (StatusCode::OK, Json(serde_json::json!({"ticket": ticket})))
 }
@@ -2010,37 +2039,52 @@ async fn approve_user_handler(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
     if !verify_secret_constant_time(provided, secret) {
-        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid admin secret"})));
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "invalid admin secret"})),
+        );
     }
 
     // Find user by ID or email
     let user_id = match (&body.user_id, &body.email) {
         (Some(id), _) => id.clone(),
         (None, Some(email)) => {
-            match sqlx::query_scalar::<_, String>(
-                "SELECT id FROM users WHERE email = $1",
-            )
-            .bind(email)
-            .fetch_optional(state.db.pool())
-            .await
+            match sqlx::query_scalar::<_, String>("SELECT id FROM users WHERE email = $1")
+                .bind(email)
+                .fetch_optional(state.db.pool())
+                .await
             {
                 Ok(Some(id)) => id,
-                Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "user not found"}))),
+                Ok(None) => {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Json(serde_json::json!({"error": "user not found"})),
+                    )
+                }
                 Err(e) => {
                     tracing::error!(error = %e, "user lookup failed");
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "internal error"})));
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": "internal error"})),
+                    );
                 }
             }
         }
         (None, None) => {
-            return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "provide user_id or email"})));
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "provide user_id or email"})),
+            );
         }
     };
 
     let role = body.role.as_deref().unwrap_or("user");
     // Only allow valid dashboard roles
     if role != "admin" && role != "user" {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "role must be 'admin' or 'user'"})));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "role must be 'admin' or 'user'"})),
+        );
     }
 
     match sqlx::query(
@@ -2053,15 +2097,26 @@ async fn approve_user_handler(
     {
         Ok(result) => {
             if result.rows_affected() == 0 {
-                (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "user not found"})))
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({"error": "user not found"})),
+                )
             } else {
                 tracing::info!(user_id = %user_id, role = role, "user approved");
-                (StatusCode::OK, Json(serde_json::json!({"message": "user approved", "user_id": user_id, "role": role})))
+                (
+                    StatusCode::OK,
+                    Json(
+                        serde_json::json!({"message": "user approved", "user_id": user_id, "role": role}),
+                    ),
+                )
             }
         }
         Err(e) => {
             tracing::error!(error = %e, "approve user failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "internal error"})))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "internal error"})),
+            )
         }
     }
 }
@@ -2078,30 +2133,42 @@ async fn reject_user_handler(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
     if !verify_secret_constant_time(provided, secret) {
-        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid admin secret"})));
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "invalid admin secret"})),
+        );
     }
 
     // Find user by ID or email
     let user_id = match (&body.user_id, &body.email) {
         (Some(id), _) => id.clone(),
         (None, Some(email)) => {
-            match sqlx::query_scalar::<_, String>(
-                "SELECT id FROM users WHERE email = $1",
-            )
-            .bind(email)
-            .fetch_optional(state.db.pool())
-            .await
+            match sqlx::query_scalar::<_, String>("SELECT id FROM users WHERE email = $1")
+                .bind(email)
+                .fetch_optional(state.db.pool())
+                .await
             {
                 Ok(Some(id)) => id,
-                Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "user not found"}))),
+                Ok(None) => {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Json(serde_json::json!({"error": "user not found"})),
+                    )
+                }
                 Err(e) => {
                     tracing::error!(error = %e, "user lookup failed");
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "internal error"})));
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": "internal error"})),
+                    );
                 }
             }
         }
         (None, None) => {
-            return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "provide user_id or email"})));
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "provide user_id or email"})),
+            );
         }
     };
 
@@ -2117,7 +2184,10 @@ async fn reject_user_handler(
     {
         Ok(result) => {
             if result.rows_affected() == 0 {
-                (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "user not found"})))
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({"error": "user not found"})),
+                )
             } else {
                 // Also revoke all sessions for this user
                 let _ = sqlx::query("DELETE FROM sessions WHERE user_id = $1")
@@ -2125,12 +2195,18 @@ async fn reject_user_handler(
                     .execute(state.db.pool())
                     .await;
                 tracing::info!(user_id = %user_id, "user rejected and sessions revoked");
-                (StatusCode::OK, Json(serde_json::json!({"message": "user rejected", "user_id": user_id})))
+                (
+                    StatusCode::OK,
+                    Json(serde_json::json!({"message": "user rejected", "user_id": user_id})),
+                )
             }
         }
         Err(e) => {
             tracing::error!(error = %e, "reject user failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "internal error"})))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "internal error"})),
+            )
         }
     }
 }
@@ -2146,7 +2222,10 @@ async fn pending_users_handler(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
     if !verify_secret_constant_time(provided, secret) {
-        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid admin secret"})));
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "invalid admin secret"})),
+        );
     }
 
     match sqlx::query_as::<_, (String, Option<String>, Option<String>, Option<DateTime<Utc>>)>(
@@ -2181,57 +2260,81 @@ async fn set_role_handler(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
     if !verify_secret_constant_time(provided, secret) {
-        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid admin secret"})));
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "invalid admin secret"})),
+        );
     }
 
     // Only allow valid dashboard roles
     if body.role != "admin" && body.role != "user" {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "role must be 'admin' or 'user'"})));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "role must be 'admin' or 'user'"})),
+        );
     }
 
     // Find user by ID or email
     let user_id = match (&body.user_id, &body.email) {
         (Some(id), _) => id.clone(),
         (None, Some(email)) => {
-            match sqlx::query_scalar::<_, String>(
-                "SELECT id FROM users WHERE email = $1",
-            )
-            .bind(email)
-            .fetch_optional(state.db.pool())
-            .await
+            match sqlx::query_scalar::<_, String>("SELECT id FROM users WHERE email = $1")
+                .bind(email)
+                .fetch_optional(state.db.pool())
+                .await
             {
                 Ok(Some(id)) => id,
-                Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "user not found"}))),
+                Ok(None) => {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Json(serde_json::json!({"error": "user not found"})),
+                    )
+                }
                 Err(e) => {
                     tracing::error!(error = %e, "user lookup failed");
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "internal error"})));
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": "internal error"})),
+                    );
                 }
             }
         }
         (None, None) => {
-            return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "provide user_id or email"})));
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "provide user_id or email"})),
+            );
         }
     };
 
-    match sqlx::query(
-        "UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2",
-    )
-    .bind(&body.role)
-    .bind(&user_id)
-    .execute(state.db.pool())
-    .await
+    match sqlx::query("UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2")
+        .bind(&body.role)
+        .bind(&user_id)
+        .execute(state.db.pool())
+        .await
     {
         Ok(result) => {
             if result.rows_affected() == 0 {
-                (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "user not found"})))
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({"error": "user not found"})),
+                )
             } else {
                 tracing::info!(user_id = %user_id, role = %body.role, "user role updated");
-                (StatusCode::OK, Json(serde_json::json!({"message": "role updated", "user_id": user_id, "role": body.role})))
+                (
+                    StatusCode::OK,
+                    Json(
+                        serde_json::json!({"message": "role updated", "user_id": user_id, "role": body.role}),
+                    ),
+                )
             }
         }
         Err(e) => {
             tracing::error!(error = %e, "set role failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "internal error"})))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "internal error"})),
+            )
         }
     }
 }
